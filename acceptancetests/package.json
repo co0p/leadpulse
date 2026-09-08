@@ -1,0 +1,13 @@
+{
+  "name": "leadpulse-acceptance-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^26.5.0",
+    "typescript": "^5.6.3"
+  }
+}
