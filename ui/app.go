@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"leadpulse/service/member"
+	"leadpulse/store"
 	"leadpulse/ui/screens"
 )
 
@@ -13,8 +14,11 @@ func NewMainWindow(app fyne.App, db *sql.DB) fyne.Window {
 	window := app.NewWindow("Team Impact Scorecard")
 	window.Resize(fyne.NewSize(1200, 800))
 
-	// Create services
-	memberService := member.NewService(db)
+	// Create repository implementations
+	memberRepo := store.NewSQLiteTeamMemberRepository(db)
+
+	// Create services with injected repositories
+	memberService := member.NewService(memberRepo)
 
 	// Create screen registry
 	screenRegistry := screens.NewScreenRegistry(memberService)

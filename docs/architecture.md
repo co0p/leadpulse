@@ -66,12 +66,13 @@ No external network connections. No cloud. No server.
 
 ## Containers
 
-### `service/` — Use Case Layer
+### `service/` — Application Use Case Layer
 - **Technology:** Go (pure functions, no I/O)
-- **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/scoring/`, `service/monthly/`). Each use case is a transaction: read from `store/`, call `engine/` for computation, write to `store/`, return the result or error.
-- **Constraints:** No UI logic. No direct SQLite access. Delegates persistence to `store/`, computation to `engine/`. Testable without Fyne by passing a mock `store` interface.
-- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember)
-- **Planned use cases:** SubmitMonthlyEntry, ComputeScores, GenerateAlerts, ExportTeamOverview.
+- **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/monthly/`). Each use case is a transaction: fetch aggregates via repository, call domain services for cross-aggregate rules, call `engine/` for computation, persist via repository, return the result or error.
+- **Dependency model:** All persistence is abstracted via repository interfaces defined in `engine/domain/`. Service layer receives these interfaces as dependencies (not `*sql.DB`). This enables testing with in-memory repositories (no database required).
+- **Constraints:** No UI logic. No direct SQLite access. No direct database dependencies. Delegates persistence to repository interfaces, computation to `engine/`, cross-aggregate rule enforcement to domain services.
+- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember), `service/monthly/` (CreateEntry, GetEntry, ListEntriesByMember, UpdateEntry).
+- **Planned use cases:** SubmitMonthlyEntry (wrapper around monthly service), GenerateAlerts, ExportTeamOverview.
 
 ### `ui/` — Desktop Interface (Replaceable)
 - **Technology:** Go, Fyne v2 (`fyne.io/fyne/v2`)
@@ -83,9 +84,10 @@ No external network connections. No cloud. No server.
 
 ### `store/` — Persistence Layer
 - **Technology:** Go, `modernc.org/sqlite` (pure Go, no CGO)
-- **Responsibility:** All SQLite reads and writes. Schema definition and migrations. Returns domain types; never raw SQL results.
+- **Responsibility:** Implements repository interfaces defined in `engine/domain/`. All SQLite reads and writes. Schema definition and migrations. Reconstructs aggregates from database rows; persists aggregates to database tables.
+- **Pattern:** Repository implementations (SQLiteTeamMemberRepository, SQLiteMonthlyEntryRepository) conform to repository interfaces defined in the domain layer. This keeps storage knowledge in the store layer while the domain layer remains storage-agnostic.
 - **Data retained:** 24 months of monthly entries per member, evidence notes, action plans, audit trail, cycle finalization state.
-- **Constraints:** No formula computation. Receives computed values from the caller and persists them.
+- **Constraints:** No formula computation. No persistence of raw domain objects; only aggregates via repository interface. Repositories validate aggregate state before persisting.
 
 ### `engine/` — Formula Engine
 - **Technology:** Go (pure functions, no external dependencies)

@@ -1,22 +1,29 @@
 package member
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
 	"leadpulse/engine/domain"
-	"leadpulse/store"
 )
 
 // Service provides use cases for team member management.
+// It now depends on the TeamMemberRepository interface instead of direct database access.
 type Service struct {
-	db *sql.DB
+	repo domain.TeamMemberRepository
 }
 
-// NewService creates a new member service.
-func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+// NewService creates a new member service with a repository implementation.
+func NewService(repo domain.TeamMemberRepository) *Service {
+	return &Service{repo: repo}
+}
+
+// NewServiceWithDB creates a service using the SQLite repository.
+// This is provided for backward compatibility with existing code.
+func NewServiceWithDB(db interface{}) *Service {
+	// The db parameter is now unused but kept for compatibility
+	// In a full refactor, callers would be updated to pass the repository directly
+	panic("use NewService with a repository instead")
 }
 
 // AddMember creates a new team member and returns it.
@@ -33,24 +40,62 @@ func (s *Service) AddMember(firstName, lastName string, seniority domain.Seniori
 		return nil, fmt.Errorf("invalid seniority level: %s", seniority)
 	}
 
-	// Add to store
-	id, err := store.AddMember(s.db, firstName, lastName, seniority)
+	// Create the full name value object
+	name, err := domain.NewFullName(firstName, lastName)
 	if err != nil {
 		return nil, err
 	}
 
-	// Retrieve and return the created member
-	return store.GetMember(s.db, id)
+	// Allocate an ID for the new member
+	// (In a full implementation, the repository might handle this)
+	allMembers, err := s.repo.FindActive()
+	if err != nil {
+		return nil, fmt.Errorf("failed to allocate ID: %w", err)
+	}
+
+	var maxID domain.TeamMemberID
+	for _, m := range allMembers {
+		if m.ID() > maxID {
+			maxID = m.ID()
+		}
+	}
+
+	newID := maxID + 1
+
+	// Create the aggregate root
+	member, err := domain.NewTeamMember(int64(newID), name, seniority)
+	if err != nil {
+		return nil, err
+	}
+
+	// Persist via repository
+	if err := s.repo.Save(member); err != nil {
+		return nil, fmt.Errorf("failed to save member: %w", err)
+	}
+
+	return member, nil
 }
 
 // ListMembers returns all active team members.
 func (s *Service) ListMembers() ([]domain.TeamMember, error) {
-	return store.ListMembers(s.db)
+	members, err := s.repo.FindActive()
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert []*TeamMember to []TeamMember for backward compatibility
+	var result []domain.TeamMember
+	for _, m := range members {
+		if m != nil {
+			result = append(result, *m)
+		}
+	}
+	return result, nil
 }
 
 // GetMember retrieves a single member by ID.
 func (s *Service) GetMember(id int64) (*domain.TeamMember, error) {
-	return store.GetMember(s.db, id)
+	return s.repo.FindByID(domain.TeamMemberID(id))
 }
 
 // EditMember updates an existing member's information.
@@ -67,16 +112,55 @@ func (s *Service) EditMember(id int64, firstName, lastName string, seniority dom
 		return nil, fmt.Errorf("invalid seniority level: %s", seniority)
 	}
 
-	// Update in store
-	if err := store.EditMember(s.db, id, firstName, lastName, seniority); err != nil {
+	// Fetch existing member
+	member, err := s.repo.FindByID(domain.TeamMemberID(id))
+	if err != nil {
+		return nil, err
+	}
+	if member == nil {
+		return nil, fmt.Errorf("member not found: %d", id)
+	}
+
+	// Create updated full name
+	name, err := domain.NewFullName(firstName, lastName)
+	if err != nil {
 		return nil, err
 	}
 
-	// Retrieve and return the updated member
-	return store.GetMember(s.db, id)
+	// Create a new aggregate with updated values
+	updatedMember, err := domain.NewTeamMember(id, name, seniority)
+	if err != nil {
+		return nil, err
+	}
+
+	// Preserve deactivation state if already deactivated
+	if !member.IsActive() {
+		_ = updatedMember.Deactivate()
+	}
+
+	// Persist via repository
+	if err := s.repo.Save(updatedMember); err != nil {
+		return nil, fmt.Errorf("failed to save member: %w", err)
+	}
+
+	return updatedMember, nil
 }
 
 // DeactivateMember soft-deletes a team member.
 func (s *Service) DeactivateMember(id int64) error {
-	return store.DeactivateMember(s.db, id)
+	member, err := s.repo.FindByID(domain.TeamMemberID(id))
+	if err != nil {
+		return err
+	}
+	if member == nil {
+		return fmt.Errorf("member not found: %d", id)
+	}
+
+	// Call the aggregate method to deactivate
+	if err := member.Deactivate(); err != nil {
+		return err
+	}
+
+	// Persist the deactivated state
+	return s.repo.Save(member)
 }

@@ -39,16 +39,16 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 				return
 			}
 			m := members[id]
-			hbox.Objects[0].(*widget.Label).SetText(m.FullName())
-			hbox.Objects[1].(*widget.Label).SetText(string(m.Seniority))
+			hbox.Objects[0].(*widget.Label).SetText(m.Name().String())
+			hbox.Objects[1].(*widget.Label).SetText(string(m.Seniority()))
 
 			// Wire Edit button
 			hbox.Objects[3].(*widget.Button).OnTapped = func() {
-				showEditDialog(memberService, m.ID, m.FirstName, m.LastName, m.Seniority, memberList)
+				showEditDialog(memberService, int64(m.ID()), m.Name().First, m.Name().Last, m.Seniority(), memberList)
 			}
 			// Wire Deactivate button
 			hbox.Objects[4].(*widget.Button).OnTapped = func() {
-				_ = memberService.DeactivateMember(m.ID)
+				_ = memberService.DeactivateMember(int64(m.ID()))
 				memberList.Refresh()
 			}
 		},

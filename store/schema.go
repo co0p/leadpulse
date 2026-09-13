@@ -25,6 +25,34 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create members table: %w", err)
 	}
 
+	// Create monthly_entries table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS monthly_entries (
+			member_id INTEGER NOT NULL,
+			month TEXT NOT NULL,
+			-- Raw signals (integers)
+			morale INTEGER NOT NULL,
+			billability INTEGER NOT NULL,
+			csat INTEGER NOT NULL,
+			net_margin INTEGER NOT NULL,
+			positive_feedback INTEGER NOT NULL,
+			critical_feedback INTEGER NOT NULL,
+			overtime_hours INTEGER NOT NULL,
+			delivery_reliability INTEGER NOT NULL,
+			mentoring_hours INTEGER NOT NULL,
+			evidence_notes_count INTEGER NOT NULL,
+			-- Computed scores (JSON-serialized due to complexity)
+			computed_scores TEXT,
+			created_at TEXT NOT NULL,
+			computed_at TEXT,
+			PRIMARY KEY (member_id, month),
+			FOREIGN KEY (member_id) REFERENCES members(id)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create monthly_entries table: %w", err)
+	}
+
 	// Create audit_log table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS audit_log (
