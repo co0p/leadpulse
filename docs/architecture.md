@@ -70,12 +70,14 @@ No external network connections. No cloud. No server.
 - **Technology:** Go (pure functions, no I/O)
 - **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/scoring/`, `service/monthly/`). Each use case is a transaction: read from `store/`, call `engine/` for computation, write to `store/`, return the result or error.
 - **Constraints:** No UI logic. No direct SQLite access. Delegates persistence to `store/`, computation to `engine/`. Testable without Fyne by passing a mock `store` interface.
-- **Examples:** AddMember, ListMembers, EditMember, DeactivateMember, SubmitMonthlyEntry, ComputeScores, GenerateAlerts, ExportTeamOverview.
+- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember)
+- **Planned use cases:** SubmitMonthlyEntry, ComputeScores, GenerateAlerts, ExportTeamOverview.
 
 ### `ui/` — Desktop Interface (Replaceable)
 - **Technology:** Go, Fyne v2 (`fyne.io/fyne/v2`)
 - **Responsibility:** Render all screens (Overview Dashboard, Monthly Input Workspace, Member Detail, Alerts Center, Monthly Review, Settings). Handle user interaction. Delegate all business logic to `service/`.
 - **Screens:** A (Overview), B (Monthly Input), C (Member Detail), D (Alerts Center), E (Monthly Review), F (Settings)
+- **Implemented screens:** F (Settings) — team member list, add/edit/deactivate dialogs, calls `service/member/`
 - **Constraints:** No business logic. No direct SQLite access. Calls `service/` for all use cases. Testable by swapping `service/` implementation. Can be replaced with a CLI, web UI, or any other presentation layer that calls the same `service/` interfaces.
 - **Future alternative:** A CLI client (`cmd/cli/`) can implement the same `service/` interfaces for headless or scripted workflows.
 
@@ -182,3 +184,7 @@ Architectural decisions for this project are recorded in `docs/adr/`. Key decisi
 - [ADR-20260913-go-fyne-desktop](adr/ADR-20260913-go-fyne-desktop.md) — Go + Fyne as the desktop UI framework
 - [ADR-20260913-sqlite-local-storage](adr/ADR-20260913-sqlite-local-storage.md) — SQLite for local-only persistence
 - [ADR-20260913-pure-go-sqlite-driver](adr/ADR-20260913-pure-go-sqlite-driver.md) — `modernc.org/sqlite` to avoid CGO
+
+---
+
+**Last updated:** 2026-09-13 — Documented Settings screen (Screen F) implementation and integrated service/member use cases

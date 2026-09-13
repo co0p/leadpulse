@@ -153,6 +153,47 @@ Items are sorted newest-first. No pagination in v1 (24-month history per member 
 
 ---
 
+## Settings Screen Form Dialogs (Screen F)
+
+The Settings screen uses standard Fyne `dialog.ShowForm` patterns for CRUD operations:
+
+### Member List Layout
+
+- **Container:** `container.NewBorder` with:
+  - Top: Title ("Settings") + subtitle ("Manage team members") + separator
+  - Center: Scrolling member list
+  - Bottom: Action button bar ("+ Add Member")
+- **List items:** Horizontal box with [Full Name] [Seniority] [spacer] [Edit] [Deactivate]
+- **Rationale:** Border layout ensures the list fills available space; button callbacks are wired per row so each item's Edit/Deactivate actions operate on the correct member ID.
+
+### Add Member Dialog
+
+- **Trigger:** "+ Add Member" button
+- **Fields:** First Name (text entry), Last Name (text entry), Seniority (dropdown)
+- **Defaults:** Seniority defaults to the first value (Junior)
+- **Actions:** "Add" (create and refresh list) or "Cancel"
+- **Behavior:** Dialog dismisses after successful add; list refreshes to show the new member
+
+### Edit Member Dialog
+
+- **Trigger:** "Edit" button per list item
+- **Fields:** Pre-filled with current member data
+- **Actions:** "Save" (update and refresh list) or "Cancel"
+- **Behavior:** Dialog pre-populates all fields; changes persist only when "Save" is clicked
+
+### Deactivate Member
+
+- **Trigger:** "Deactivate" button per list item
+- **Behavior:** No confirmation dialog in v1; soft-delete is immediate. List refreshes. Historical data is preserved in the database.
+- **Future:** v2 should add "Are you sure?" confirmation before deactivating
+
+### Error Handling
+
+- Service-layer validation (empty names, invalid seniority) returns errors silently in v1. Errors are logged but not shown to the user.
+- Future: v2 should display validation errors in the dialog itself (e.g., "First name is required").
+
+---
+
 ## Content Conventions
 
 From the PRD:

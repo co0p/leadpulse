@@ -66,6 +66,7 @@ The system has four layers with different risk profiles:
 - Use `":memory:"` as the SQLite DSN. No test writes to disk.
 - Each test: create fixtures via store methods, verify state in the database, verify audit trail entries.
 - Cover happy path and constraint violations (foreign keys, NOT NULL, unique constraints).
+- **Standard helper: `setupTestDB()`** — initializes an in-memory SQLite database with the full schema applied. All store tests must call `setupTestDB()` before creating fixtures. This ensures test isolation and consistent schema versioning across all tests. See `store/member_test.go` for the reference implementation.
 
 **All tests:**
 - Must not share mutable state. Each test case sets up its own fixtures.

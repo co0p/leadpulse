@@ -11,12 +11,23 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ### Team Member Management (CRUD)
 - **Job story:** When I set up the tool or my team changes, I want to add, view, edit, and remove team members with their name and seniority level, so that the scorecard always reflects my current team and shows each member's context.
-- **Evidence:** 
-  - Store layer: 5 integration tests passing (add, list, edit, deactivate, soft-delete behavior)
-  - Service layer: 7 unit tests passing (create, list, get, edit, delete, validation)
-  - UI layer: Settings screen (Screen F) implemented with Fyne v2
-  - Database schema: idempotent SQLite schema with members table and audit_log
-  - Acceptance criteria: All 5 criteria met (AC-1: add/view/edit/remove, AC-2: seniority, AC-3: edit, AC-4: deactivate, AC-5: persistence)
+- **Acceptance scenarios verified:**
+  - Add member → appears in list with name and seniority ✓
+  - Edit member → updated fields persist ✓
+  - Deactivate member → soft-deleted, excluded from list, historical data preserved ✓
+  - Persistence → members survive app restart (via SQLite) ✓
+- **Evidence:**
+  - Store layer: 5 integration tests passing (`store/member_test.go`; add, list, edit, deactivate, soft-delete with audit trail)
+  - Service layer: 7 unit tests passing (`service/member/member_test.go`; use cases with mocked store, validation rules)
+  - UI layer: Settings screen (Screen F) with add/edit/deactivate dialogs; full CRUD via Fyne
+  - Database: idempotent SQLite schema in `store/schema.go` with members table and audit_log
+  - Build: successful without errors (harmless macOS linker warnings only)
+- **Acceptance criteria:** All 5 met (AC-1: add/view/edit/remove, AC-2: seniority, AC-3: edit, AC-4: deactivate, AC-5: persistence)
+- **Key commits:** 
+  - Store: `ecf0b6e`, `d070add`, `6749c3a`
+  - Service: `74b53fa`
+  - UI: `173d3b4`, `f920c60` (layout fix + dialogs)
+- **Test command:** `go test -race ./...` → all pass
 
 ---
 
