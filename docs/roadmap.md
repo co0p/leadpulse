@@ -31,9 +31,11 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ---
 
-## In Progress
+## In Progress (Partial)
 
-_Awaiting next increment._
+### Formula Engine — Core Scoring
+- **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
+- **Status:** increment defined; planning phase next
 
 ---
 
