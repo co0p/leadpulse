@@ -21,6 +21,11 @@ _No active work yet._
 
 ## Planned
 
+### Team Member Management (CRUD)
+- **Job story:** When I set up the tool or my team changes, I want to add, view, edit, and remove team members, so that the scorecard always reflects my current team.
+- **Evidence:** pending — manual verification: add member, edit name, deactivate member (soft delete, history preserved), member appears/disappears in all screens correctly
+- **Why first:** all other features depend on members existing in the system. Must be in place before any data entry or scoring can be tested end-to-end.
+
 ### Formula Engine — Core Scoring
 - **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
 - **Evidence:** pending — unit tests for all normalization and scoring functions against PRD formulas
