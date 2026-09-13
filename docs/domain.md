@@ -4,16 +4,35 @@ Shared vocabulary for Team Impact Scorecard. Use these terms consistently in cod
 
 ---
 
+## Design Patterns and Architecture
+
+**Value Object**
+An immutable, identity-less object that represents a single domain concept and enforces its own constraints. Examples: `Seniority` (Junior|Mid|Senior|Principal), `FullName` (first + last), `MoraleScore` (0–5). Value objects are created via constructor functions that validate inputs; invalid inputs are rejected immediately. Once created, a value object cannot be modified.
+
+**Aggregate**
+A cluster of entities and value objects managed together as a single unit of persistence. The aggregate has one root entity (the Aggregate Root) that controls all access to the aggregate's internal state. All invariants and business rules are enforced within the aggregate. Examples: `TeamMember` (aggregate root managing name, seniority, and deactivation state), `MonthlyEntry` (aggregate root managing raw signals, impact ratings, and computed scores).
+
+**Aggregate Root**
+The entry point to an aggregate. The aggregate root has an identity (ID) and controls all interactions with the aggregate. Only the aggregate root is persisted and retrieved directly; other entities within the aggregate are accessed through the root.
+
+**Repository**
+A collection-like abstraction that persists and retrieves aggregates from storage. The repository presents a domain-oriented interface (Save, FindByID, FindByMember, Delete) without exposing storage details (SQL, database schema, transaction mechanics). Domain logic depends on repository interfaces, not on concrete storage implementations.
+
+**Domain Service**
+A stateless service that enforces business rules spanning multiple aggregates. Domain services operate on aggregates and repositories, but the logic belongs to the domain, not to the application layer. Example: `MonthlyEntryService` enforces that only active members can have entries and that one entry per member per month is allowed.
+
+---
+
 ## Core Concepts
 
 **Team Lead**
 The sole user of v1. A person responsible for one team of direct reports. Enters monthly data, reviews scores and alerts, manages the monthly cycle, and exports summaries.
 
 **Team Member**
-A direct report of the Team Lead. The subject of each monthly scorecard entry.
+A direct report of the Team Lead. Represented as an aggregate root with identity (ID), name, and seniority level. All state transitions (e.g., seniority changes, deactivation) are controlled by aggregate methods. Invariants: ID is immutable; once deactivated, cannot be reactivated; seniority must be one of Junior, Mid, Senior, Principal.
 
 **Monthly Entry**
-The complete set of raw signals, impact ratings, and computed scores for one Team Member for one calendar month. Identified by `(member_id, month)`.
+An aggregate root containing all raw signals, impact ratings, and computed scores for one Team Member for one calendar month. Identified by `(member_id, month)`. Contains a sub-aggregate of raw signals and validates all signal constraints and score ranges. Invariants: one entry per member per month; computed scores are validated to be 0–100; only active members can have entries (enforced by MonthlyEntryService).
 
 **Cycle**
 The structured monthly operating rhythm. A cycle covers one calendar month. It progresses through phases: Prepare → Data Entry → Auto Compute → Triage → Monthly Review → 1:1 Execution → Follow-through.

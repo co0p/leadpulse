@@ -9,8 +9,8 @@ Testing practices for Team Impact Scorecard. The service layer is the primary te
 The system has four layers with different risk profiles:
 
 - **`engine/`** — pure functions, deterministic, no I/O. The formulas in the PRD are the specification. Any divergence is a bug. This layer must have comprehensive unit tests because errors here silently corrupt people decisions. Tests run in milliseconds, have no dependencies, and are the primary correctness gate.
-- **`service/`** — use cases (transactions). Each use case reads from `store`, calls `engine`, writes to `store`, and returns results. The service layer is the API contract. Unit tests mock the `store` interface and real `engine` functions, verifying that use cases call store methods in the right order with the right data. Service tests prove that UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces and behave identically.
-- **`store/`** — SQLite persistence. Risk is data loss, constraint violations, incorrect reads of historical data (which affect trend calculations), and audit trail correctness. Integration tests against an in-memory SQLite database (`":memory:"` DSN) cover all CRUD paths.
+- **`service/`** — use cases (transactions). Each use case fetches aggregates via repository, calls domain services and `engine`, and persists results via repository. The service layer is the API contract. Unit tests inject in-memory repository implementations (no database needed) and real `engine` functions. Service tests verify that use cases call repository and domain service methods in the right order with the right data. Service tests prove that UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces and behave identically.
+- **`store/`** — repository implementations (SQLiteTeamMemberRepository, SQLiteMonthlyEntryRepository) that persist and retrieve aggregates from SQLite. Risk is data loss, constraint violations, incorrect reads of historical data (which affect trend calculations), and audit trail correctness. Integration tests against an in-memory SQLite database (`":memory:"` DSN) cover all CRUD paths and aggregate reconstruction.
 - **`ui/`** — Fyne widgets and views. Fyne does not have reliable headless test support. Manual verification is pragmatic for v1. Acceptance criteria in `.agent/increment.md` are manual user stories, not automated suites.
 
 ---
@@ -56,10 +56,11 @@ The system has four layers with different risk profiles:
 
 **Service tests:**
 - Live in `service/<domain>/<file>_test.go`, alongside the use case.
-- Function names: `Test<UseCaseName>_<scenario>`. Example: `TestAddMember_createsAndReturns`, `TestSubmitMonthlyEntry_computesAndPersists`.
-- Use a mock store interface (`store.MockStore`). Real `engine` functions (no mocks).
-- Each test: set up fixtures (member, entry data), call the use case, verify store method calls and return values.
-- Verify error cases: invalid input, store errors, engine validation failures.
+- Function names: `Test<UseCaseName>_<scenario>`. Example: `TestAddMember_createsAndReturns`, `TestCreateEntry_validatesActiveMember`.
+- Use in-memory repository implementations (InMemoryTeamMemberRepository, InMemoryMonthlyEntryRepository) — no database dependency. Real `engine` functions and domain services (no mocks).
+- Each test: create an in-memory repository, inject it into the service, set up fixtures via repository, call the use case, verify repository state and return values.
+- Verify error cases: invalid input, repository errors, domain service rule violations (e.g., inactive member, duplicate entry), engine validation failures.
+- Example: for CreateMonthlyEntry, test that calling with an inactive member fails before calling repository.Save().
 
 **Store integration tests:**
 - Live in `store/<file>_test.go`, alongside the function under test.
