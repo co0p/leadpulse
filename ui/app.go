@@ -4,8 +4,6 @@ import (
 	"database/sql"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 	"leadpulse/service/member"
 	"leadpulse/ui/screens"
 )
@@ -21,12 +19,7 @@ func NewMainWindow(app fyne.App, db *sql.DB) fyne.Window {
 	// Create screen registry
 	screenRegistry := screens.NewScreenRegistry(memberService)
 
-	// Create simple container with settings screen (Screen F)
-	content := container.NewVBox(
-		widget.NewCard("Settings", "Manage team members", screenRegistry.SettingsScreen()),
-	)
-
-	window.SetContent(content)
+	window.SetContent(screenRegistry.SettingsScreen())
 
 	return window
 }
