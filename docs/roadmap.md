@@ -26,6 +26,21 @@ _Awaiting next increment._
 
 ---
 
+## Open Questions
+
+### Reactivating Deactivated Members
+- **Question:** When a previously deactivated member re-joins the team, should they be reactivated in place (restoring their history) or added as a new member (clean slate)?
+- **Considerations:** Reactivation preserves audit history and avoids duplicate entries; a new member record is simpler but loses historical context and risks orphaned score data.
+- **Decision needed before:** Member Detail (Screen C) and any feature that reads historical data per member.
+
+### Duplicate Member Names
+- **Question:** Two or more members can legitimately share the same first and last name. How should the UI help users distinguish between them when selecting or reviewing?
+- **Constraints:** The store must allow duplicate names (names are not a unique key). Disambiguation must not require renaming real people.
+- **Options to explore:** display seniority + join date inline, require a display alias on add, or show member ID as a tie-breaker.
+- **Decision needed before:** Monthly Input Workspace (Screen B) and any picker or dropdown that references members by name.
+
+---
+
 ## Planned
 
 ### Formula Engine — Core Scoring
