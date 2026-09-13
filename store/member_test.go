@@ -44,6 +44,34 @@ func TestAddMember_createsAndReturnsID(t *testing.T) {
 	}
 }
 
+// TestListMembers_returnsActiveMembers tests that ListMembers returns only active members.
+func TestListMembers_returnsActiveMembers(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	// Add two members
+	id1, _ := AddMember(db, "Alice", "Chen", domain.SenioritySenior)
+	id2, _ := AddMember(db, "Bob", "Smith", domain.SeniorityMid)
+
+	// List members (none deactivated yet)
+	members, err := ListMembers(db)
+	if err != nil {
+		t.Fatalf("ListMembers failed: %v", err)
+	}
+
+	if len(members) != 2 {
+		t.Fatalf("expected 2 members, got %d", len(members))
+	}
+
+	// Verify the members
+	if members[0].ID != id1 || members[0].FirstName != "Alice" {
+		t.Errorf("first member mismatch")
+	}
+	if members[1].ID != id2 || members[1].FirstName != "Bob" {
+		t.Errorf("second member mismatch")
+	}
+}
+
 // setupTestDB creates an in-memory SQLite database for testing.
 func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite", ":memory:")
