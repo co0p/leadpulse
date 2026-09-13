@@ -1,47 +1,75 @@
 # Testing
 
-Testing practices for Team Impact Scorecard. The formula engine is the highest-risk component: incorrect scoring or alert thresholds produce bad people decisions. The test strategy is designed to give near-complete confidence in engine correctness with fast feedback, while accepting lower automated coverage for the Fyne UI layer.
+Testing practices for Team Impact Scorecard. The service layer is the primary testability boundary: use cases can be tested without Fyne by passing a mock store. The formula engine is the highest-risk component; incorrect scoring or alert thresholds produce bad people decisions. The test strategy gives near-complete confidence in engine and service correctness with fast feedback, while accepting lower automated coverage for the UI layer.
 
 ---
 
 ## Testing Approach and Rationale
 
-The system has three layers with different risk profiles:
+The system has four layers with different risk profiles:
 
 - **`engine/`** — pure functions, deterministic, no I/O. The formulas in the PRD are the specification. Any divergence is a bug. This layer must have comprehensive unit tests because errors here silently corrupt people decisions. Tests run in milliseconds, have no dependencies, and are the primary correctness gate.
-- **`store/`** — SQLite persistence. Risk is data loss, constraint violations, and incorrect reads of historical data (which affect trend calculations). Integration tests against an in-memory SQLite database cover the meaningful paths.
-- **`ui/`** — Fyne widgets and views. Fyne does not have a reliable headless test driver. Manual verification is the pragmatic choice for v1. UI tests would be fragile, slow to maintain, and provide less signal than running the app.
+- **`service/`** — use cases (transactions). Each use case reads from `store`, calls `engine`, writes to `store`, and returns results. The service layer is the API contract. Unit tests mock the `store` interface and real `engine` functions, verifying that use cases call store methods in the right order with the right data. Service tests prove that UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces and behave identically.
+- **`store/`** — SQLite persistence. Risk is data loss, constraint violations, incorrect reads of historical data (which affect trend calculations), and audit trail correctness. Integration tests against an in-memory SQLite database (`":memory:"` DSN) cover all CRUD paths.
+- **`ui/`** — Fyne widgets and views. Fyne does not have reliable headless test support. Manual verification is pragmatic for v1. Acceptance criteria in `.agent/increment.md` are manual user stories, not automated suites.
 
 ---
 
 ## Choosing Test Depth
 
-Write a unit test when:
+**Engine unit tests:** Write when:
 - A formula, normalization, threshold, or computation rule from the PRD is being implemented or changed.
 - A new alert condition is added.
 - A trend calculation is introduced (MA3, Delta1, Delta3, Vol3, dimension deltas).
-- A business rule is encoded (e.g., finalization block when completeness < 70%).
+- A business rule is encoded (e.g., guardrail logic).
 
-Write an integration test when:
+**Service unit tests:** Write when:
+- A new use case is implemented (e.g., `AddMember`, `SubmitMonthlyEntry`, `GenerateAlerts`).
+- A use case's logic changes (order of operations, new calls to `store` or `engine`, new validations).
+- A use case's error handling is added or changed.
+
+**Store integration tests:** Write when:
 - A new store function is added (read, write, update, delete).
 - A schema migration is introduced.
-- A query aggregates or joins data across months.
+- A query aggregates or joins data across months or members.
+- Soft-delete, audit trail, or constraint logic is added.
 
-No new test needed when:
+**UI manual verification:** Required when:
+- A screen is added or its layout changes.
+- A new interaction pattern is introduced (e.g., new form, new table, new dialog).
+- See acceptance criteria in `.agent/increment.md` for manual test scenarios.
+
+**No new test needed when:**
 - Renaming a variable or extracting a helper with identical behavior.
-- Changing UI layout, colors, or widget positioning.
-- Adding a log statement.
+- Changing UI colors, fonts, or widget positioning (not behavior).
+- Adding a log statement or comment.
 
 ---
 
 ## Test Design Conventions
 
-- **Engine tests** live in `engine/<file>_test.go`, alongside the function under test.
-- Test function names follow `Test<FunctionName>_<scenario>`. Example: `TestNormalizeMorale_midRange`, `TestAlertBurnout_redThreshold`.
-- Each test case states its input, expected output, and the PRD section it covers in a comment.
-- Table-driven tests are preferred for formula coverage — one table per function, rows per boundary condition.
-- Integration tests use `":memory:"` as the SQLite DSN. No test writes to disk.
-- Tests must not share mutable state. Each test case sets up its own fixtures.
+**Engine tests:**
+- Live in `engine/<file>_test.go`, alongside the function under test.
+- Function names: `Test<FunctionName>_<scenario>`. Example: `TestNormalizeMorale_midRange`, `TestAlertBurnout_redThreshold`.
+- Each case states input, expected output, and the PRD section it covers in a comment.
+- Table-driven tests preferred for formula coverage — one table per function, rows per boundary condition.
+
+**Service tests:**
+- Live in `service/<domain>/<file>_test.go`, alongside the use case.
+- Function names: `Test<UseCaseName>_<scenario>`. Example: `TestAddMember_createsAndReturns`, `TestSubmitMonthlyEntry_computesAndPersists`.
+- Use a mock store interface (`store.MockStore`). Real `engine` functions (no mocks).
+- Each test: set up fixtures (member, entry data), call the use case, verify store method calls and return values.
+- Verify error cases: invalid input, store errors, engine validation failures.
+
+**Store integration tests:**
+- Live in `store/<file>_test.go`, alongside the function under test.
+- Use `":memory:"` as the SQLite DSN. No test writes to disk.
+- Each test: create fixtures via store methods, verify state in the database, verify audit trail entries.
+- Cover happy path and constraint violations (foreign keys, NOT NULL, unique constraints).
+
+**All tests:**
+- Must not share mutable state. Each test case sets up its own fixtures.
+- Test must be independent: can run in any order, can run in parallel with `-race`.
 
 ---
 
@@ -83,11 +111,13 @@ Interpret failures: a failing engine test is a blocking defect. A failing store 
 
 ## Evidence Required Before Merge
 
-- `go test -race ./engine/... ./store/...` passes with no failures and no race conditions.
+- `go test -race ./engine/... ./service/... ./store/...` passes with no failures and no race conditions.
 - `go build ./...` succeeds.
-- For any change touching a formula, alert, or trend calculation: the relevant test case(s) exist and are named after the PRD section they verify.
+- For any change touching a formula, alert, or trend calculation: the relevant engine test case(s) exist and are named after the PRD section they verify.
+- For any new use case: at least one service test covers the happy path and one covers relevant error cases (invalid input, store failures).
 - For any new store function: at least one integration test covers the happy path and one covers the relevant constraint or error case.
-- Manual smoke-test of the affected screen(s) on the developer's machine.
+- For any UI screen or interaction: manual acceptance-test scenarios pass on the developer's machine (see `.agent/increment.md` for the expected user journeys).
+- Service tests prove the use case contract is stable, independent of the UI implementation.
 
 ---
 

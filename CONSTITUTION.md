@@ -10,8 +10,9 @@ A monthly decision-support tool for Team Leads. Standalone desktop application. 
 - **Behavior first.** Every change to production behavior has a test that captures the intent before the code changes.
 - **Determinism is non-negotiable.** The same inputs must always produce the same outputs. Formula engine functions are pure; no side effects.
 - **Privacy by design.** No telemetry, no analytics, no external API calls. Data never leaves the device.
-- **Dependency direction is a hard rule.** `ui` → `store` → `engine`. No layer may import from a layer above it.
-- **Engine is the source of truth.** All scoring, normalization, alert, and trend logic lives in `engine/`. No formula logic in `ui/` or `store/`.
+- **Dependency direction is a hard rule.** `ui` → `service` → `store` → `engine`. No layer may import from a layer above it.
+- **Service is the API contract.** All use cases live in `service/`. The UI is replaceable; a CLI, web server, or other client can call the same `service/` interfaces.
+- **Engine is the source of truth.** All scoring, normalization, alert, and trend logic lives in `engine/`. No formula logic in `service/`, `store/`, or `ui/`.
 - **No gold-plating.** Build what the current increment requires. Defer generalization until a second use case exists.
 - **Human review always.** The tool surfaces recommendations; a human makes every decision. The UI must never present a score as a verdict.
 
@@ -19,21 +20,24 @@ A monthly decision-support tool for Team Leads. Standalone desktop application. 
 
 ## Architecture Boundaries
 
-Three layers. One direction.
+Four layers. One direction.
 
 ```
-ui/       — Fyne views, widgets, event handlers. No business logic.
+ui/       — Fyne views, widgets, event handlers. No business logic. Replaceable.
+service/  — Use cases (transactions). Call store, call engine, return results. Testable without UI.
 store/    — SQLite persistence. Reads/writes domain types. No formula logic.
 engine/   — Pure functions. Scoring, normalization, alerts, trends. No I/O.
 ```
 
 **Rules:**
-- `ui` may import `store` and `engine`.
+- `ui` may import `service` only. No direct `store` or `engine` calls.
+- `service` may import `store` and `engine`. Each use case is a transaction: read from `store`, call `engine` if needed, write to `store`, return result.
 - `store` may import `engine` types only (no engine computation).
 - `engine` imports nothing from this project.
 - No circular imports.
 - SQLite file lives in the OS user data directory (`os.UserConfigDir()`).
 - Single binary distribution — no installer, no runtime dependencies.
+- UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces.
 
 **Technology decisions:**
 - Language: Go

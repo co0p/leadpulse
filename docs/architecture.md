@@ -15,12 +15,24 @@ Team Impact Scorecard — structural overview.
 │  │                                                      │  │
 │  │  ┌──────────────┐   calls   ┌──────────────────┐    │  │
 │  │  │              │ ────────► │                  │    │  │
-│  │  │   ui/        │           │   store/         │    │  │
+│  │  │   ui/        │           │   service/       │    │  │
 │  │  │              │           │                  │    │  │
-│  │  │  Fyne views, │   calls   │  SQLite read/    │    │  │
-│  │  │  widgets,    │ ────────► │  write. Domain   │    │  │
-│  │  │  event       │           │  type mapping.   │    │  │
-│  │  │  handlers    │           │  No formulas.    │    │  │
+│  │  │  Fyne views, │           │  Use cases:      │    │  │
+│  │  │  widgets,    │           │  AddMember,      │    │  │
+│  │  │  event       │           │  SubmitMonth,    │    │  │
+│  │  │  handlers    │           │  GenerateAlerts, │    │  │
+│  │  │              │           │  ExportData.     │    │  │
+│  │  │              │           │  No I/O.         │    │  │
+│  │  │              │           └────────┬─────────┘    │  │
+│  │  │              │                    │ calls        │  │
+│  │  │              │                    ▼              │  │
+│  │  │              │           ┌──────────────────┐    │  │
+│  │  │              │           │                  │    │  │
+│  │  │              │   calls   │   store/         │    │  │
+│  │  │              │ ────────► │                  │    │  │
+│  │  │              │           │  SQLite read/    │    │  │
+│  │  │              │           │  write. Domain   │    │  │
+│  │  │              │           │  type mapping.   │    │  │
 │  │  │              │           └────────┬─────────┘    │  │
 │  │  │              │                    │ reads/writes  │  │
 │  │  │              │   calls            ▼              │  │
@@ -28,8 +40,8 @@ Team Impact Scorecard — structural overview.
 │  │  │              │           │                  │    │  │
 │  │  └──────────────┘           │   engine/        │    │  │
 │  │                             │                  │    │  │
-│  │                             │  Pure functions. │    │  │
-│  │                             │  Scoring, norms, │    │  │
+│  │   (Fyne replaceable         │  Pure functions. │    │  │
+│  │    with CLI, web, etc.)     │  Scoring, norms, │    │  │
 │  │                             │  alerts, trends. │    │  │
 │  │                             │  No I/O.         │    │  │
 │  │                             └──────────────────┘    │  │
@@ -54,11 +66,18 @@ No external network connections. No cloud. No server.
 
 ## Containers
 
-### `ui/` — Desktop Interface
+### `service/` — Use Case Layer
+- **Technology:** Go (pure functions, no I/O)
+- **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/scoring/`, `service/monthly/`). Each use case is a transaction: read from `store/`, call `engine/` for computation, write to `store/`, return the result or error.
+- **Constraints:** No UI logic. No direct SQLite access. Delegates persistence to `store/`, computation to `engine/`. Testable without Fyne by passing a mock `store` interface.
+- **Examples:** AddMember, ListMembers, EditMember, DeactivateMember, SubmitMonthlyEntry, ComputeScores, GenerateAlerts, ExportTeamOverview.
+
+### `ui/` — Desktop Interface (Replaceable)
 - **Technology:** Go, Fyne v2 (`fyne.io/fyne/v2`)
-- **Responsibility:** Render all screens (Overview Dashboard, Monthly Input Workspace, Member Detail, Alerts Center, Monthly Review, Settings). Handle user interaction. Delegate computation to `engine/`, delegate persistence to `store/`.
+- **Responsibility:** Render all screens (Overview Dashboard, Monthly Input Workspace, Member Detail, Alerts Center, Monthly Review, Settings). Handle user interaction. Delegate all business logic to `service/`.
 - **Screens:** A (Overview), B (Monthly Input), C (Member Detail), D (Alerts Center), E (Monthly Review), F (Settings)
-- **Constraints:** No business logic. No direct SQLite access. Calls `engine/` for live formula preview during input.
+- **Constraints:** No business logic. No direct SQLite access. Calls `service/` for all use cases. Testable by swapping `service/` implementation. Can be replaced with a CLI, web UI, or any other presentation layer that calls the same `service/` interfaces.
+- **Future alternative:** A CLI client (`cmd/cli/`) can implement the same `service/` interfaces for headless or scripted workflows.
 
 ### `store/` — Persistence Layer
 - **Technology:** Go, `modernc.org/sqlite` (pure Go, no CGO)
@@ -82,13 +101,15 @@ No external network connections. No cloud. No server.
 ## Dependency Direction
 
 ```
-ui  →  store  →  engine  (types only)
-ui  →  engine
+ui  →  service  →  store  →  engine  (types only)
+            ↓
+         engine
 ```
 
-`engine` has no project-internal dependencies.  
-`store` may use engine types for its function signatures but must not call engine computation functions.  
-`ui` may call both `store` and `engine` directly (e.g., for live preview during input).
+- `engine` has no project-internal dependencies.
+- `store` may use engine types for its function signatures but must not call engine computation functions.
+- `service` calls both `store` and `engine`. Each use case is a transaction: read from `store`, call `engine` if needed, write to `store`, return result.
+- `ui` calls `service` only. No direct `store` or `engine` calls. This makes `ui` replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces.
 
 ---
 
@@ -96,11 +117,12 @@ ui  →  engine
 
 | From | To | What |
 |---|---|---|
-| `ui` (input form) | `engine` | Live formula recompute as user types |
-| `ui` (save action) | `store` | Persist monthly entry + computed scores |
-| `ui` (load screen) | `store` | Fetch member list, historical entries, alerts, evidence |
-| `store` (read) | SQLite file | SQL queries |
+| `ui` (event handler) | `service` | Use case call (e.g., `service.AddMember(firstName, lastName, seniority)`) |
+| `service` (use case) | `store` | Read/write domain entities |
+| `service` (use case) | `engine` | Compute scores, alerts, trends, guardrails |
+| `store` (read) | SQLite file | SQL queries returning domain types |
 | `store` (write) | SQLite file | SQL inserts/updates, append-only audit log |
+| `ui` (live preview) | `service` (stateless) | Call `engine` via `service` for real-time formula preview during input |
 
 ---
 
@@ -115,6 +137,41 @@ Tables:
 - `cycle_state` — team_id, month, phase, finalized_at, locked
 
 Schema migrations are additive-only in v1 (see `docs/deployment.md`).
+
+---
+
+## Testing Strategy by Layer
+
+The service layer is the testability boundary. Tests isolate each layer and verify integration points.
+
+**`engine/` — unit tests (pure functions)**
+- No mocks needed. Direct function calls with inputs and assertions on outputs.
+- 100% of formulas, alert thresholds, trend calculations, guardrail logic.
+- Example: `TestNormalizeMorale_midRange`, `TestAlertBurnout_redThreshold`.
+- Gate: all engine tests must pass before any service or UI code runs.
+
+**`service/` — unit tests (mock store, real engine)**
+- Mock the `store` interface. Real `engine` functions (no mocks).
+- Each use case is a test: call the use case with inputs, verify it calls `store` methods in the right order with the right data, verify the result.
+- Example: `TestAddMember_createsAndReturns`, `TestSubmitMonthlyEntry_computesAndPersists`.
+- Gate: all service tests must pass before UI code is written. Services are the API contract.
+
+**`store/` — integration tests (in-memory SQLite, real engine)**
+- No UI involved. SQLite database is in-memory (`:memory:` DSN).
+- Cover all CRUD operations, schema constraints, audit trail logging, soft delete behavior.
+- Each test sets up fixtures, calls store methods, verifies state in the database.
+- Example: `TestAddMember_persistsAndAuditLogs`, `TestQueryMembers_excludesInactive`.
+- Gate: all store tests must pass before services or UI code runs.
+
+**`ui/` — manual verification only**
+- Fyne has limited headless test support. Manual smoke-testing on-screen is the pragmatic gate.
+- Verify: screens render, buttons trigger service calls, data flows from service to display, navigation works.
+- Acceptance tests in `.agent/increment.md` are manual user stories, not automated suites.
+- Gate: acceptance criteria pass in manual testing on the target platform (macOS, Windows, Linux).
+
+**UI Replaceability Test**
+- If a second presentation layer (CLI, web UI) is added, it must pass the same service-level tests without modification.
+- This proves the service layer is the true interface contract, not the Fyne UI.
 
 ---
 
