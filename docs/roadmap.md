@@ -31,11 +31,31 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ---
 
-## In Progress (Partial)
+## Done
 
 ### Formula Engine — Core Scoring
 - **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
-- **Status:** increment defined; planning phase next
+- **Acceptance scenarios verified:**
+  - All 10 normalization functions compute correctly per PRD 5.2 ✓
+  - Impact-weighted signal computation correct per PRD 5.3 ✓
+  - Dimension scores (DG/DP/DT/DO) computed correctly per PRD 5.4 ✓
+  - Total Impact Index (TII) computed correctly per PRD 5.5 ✓
+  - Completeness percentage computed correctly per PRD 4.3 ✓
+  - End-to-end scoring works for typical, strong, and struggling members ✓
+- **Evidence:**
+  - Engine layer: 53 unit and integration tests passing (`engine/scoring/` with 22 normalization, 4 impact, 12 dimension, 9 TII/completeness/e2e tests)
+  - Test coverage: 87.5% of scoring engine statements
+  - Race detector: all tests pass with `-race` flag
+  - Validation: MoraleN, BillabilityN, CSATN, MarginN, PositiveN, CriticalN, OvertimeN, DeliveryN, MentoringN, EvidenceN, ComputeImpactWeighted, ComputeDimensionGrowth/Project/Team/Org, ComputeTII, ComputeCompleteness
+- **Acceptance criteria:** All 6 met (AC-1 through AC-6)
+- **Key commits:** 
+  - Tidy: 7a704ac (domain types)
+  - Feat: aeb62c1 (helpers), 6e01c7b (normalization), a866e78 (impact), 8cc6243 (dimensions), 5773707 (TII/completeness)
+- **Test command:** `go test -race ./...` → all pass
+
+## In Progress
+
+_Awaiting next increment._
 
 ---
 
