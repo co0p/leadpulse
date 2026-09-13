@@ -86,3 +86,104 @@ func ListMembers(db *sql.DB) ([]domain.TeamMember, error) {
 
 	return members, nil
 }
+
+// GetMember retrieves a single member by ID (including deactivated members).
+func GetMember(db *sql.DB, id int64) (*domain.TeamMember, error) {
+	var firstName, lastName string
+	var seniority string
+	var createdAtStr string
+	var deactivatedAtStr sql.NullString
+
+	err := db.QueryRow(`
+		SELECT id, first_name, last_name, seniority, created_at, deactivated_at
+		FROM members
+		WHERE id = ?
+	`, id).Scan(&id, &firstName, &lastName, &seniority, &createdAtStr, &deactivatedAtStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("member not found: %w", err)
+		}
+		return nil, fmt.Errorf("failed to query member: %w", err)
+	}
+
+	createdAt, err := time.Parse(time.RFC3339, createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse created_at: %w", err)
+	}
+
+	var deactivatedAt *time.Time
+	if deactivatedAtStr.Valid {
+		dt, err := time.Parse(time.RFC3339, deactivatedAtStr.String)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse deactivated_at: %w", err)
+		}
+		deactivatedAt = &dt
+	}
+
+	return &domain.TeamMember{
+		ID:            id,
+		FirstName:     firstName,
+		LastName:      lastName,
+		Seniority:     domain.Seniority(seniority),
+		CreatedAt:     createdAt,
+		DeactivatedAt: deactivatedAt,
+	}, nil
+}
+
+// EditMember updates an existing member's information and logs the changes.
+func EditMember(db *sql.DB, id int64, firstName, lastName string, seniority domain.Seniority) error {
+	// Get the current member to compare
+	current, err := GetMember(db, id)
+	if err != nil {
+		return err
+	}
+
+	// Update the member
+	_, err = db.Exec(`
+		UPDATE members
+		SET first_name = ?, last_name = ?, seniority = ?
+		WHERE id = ?
+	`, firstName, lastName, string(seniority), id)
+	if err != nil {
+		return fmt.Errorf("failed to update member: %w", err)
+	}
+
+	// Log changes to audit trail
+	if current.FirstName != firstName {
+		if err := logAuditEvent(db, id, "first_name", current.FirstName, firstName); err != nil {
+			return err
+		}
+	}
+	if current.LastName != lastName {
+		if err := logAuditEvent(db, id, "last_name", current.LastName, lastName); err != nil {
+			return err
+		}
+	}
+	if current.Seniority != seniority {
+		if err := logAuditEvent(db, id, "seniority", string(current.Seniority), string(seniority)); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// DeactivateMember soft-deletes a member by setting deactivated_at.
+func DeactivateMember(db *sql.DB, id int64) error {
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err := db.Exec(`
+		UPDATE members
+		SET deactivated_at = ?
+		WHERE id = ?
+	`, now, id)
+	if err != nil {
+		return fmt.Errorf("failed to deactivate member: %w", err)
+	}
+
+	// Log the deactivation
+	if err := logAuditEvent(db, id, "deactivated_at", "", now); err != nil {
+		return err
+	}
+
+	return nil
+}
