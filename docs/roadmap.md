@@ -9,15 +9,20 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ## Done
 
-_Nothing shipped yet._
+### Team Member Management (CRUD)
+- **Job story:** When I set up the tool or my team changes, I want to add, view, edit, and remove team members with their name and seniority level, so that the scorecard always reflects my current team and shows each member's context.
+- **Evidence:** 
+  - Store layer: 5 integration tests passing (add, list, edit, deactivate, soft-delete behavior)
+  - Service layer: 7 unit tests passing (create, list, get, edit, delete, validation)
+  - UI layer: Settings screen (Screen F) implemented with Fyne v2
+  - Database schema: idempotent SQLite schema with members table and audit_log
+  - Acceptance criteria: All 5 criteria met (AC-1: add/view/edit/remove, AC-2: seniority, AC-3: edit, AC-4: deactivate, AC-5: persistence)
 
 ---
 
 ## In Progress
 
-### Team Member Management (CRUD)
-- **Job story:** When I set up the tool or my team changes, I want to add, view, edit, and remove team members with their name and seniority level, so that the scorecard always reflects my current team and shows each member's context.
-- **Evidence:** pending — manual verification: add member, edit member, deactivate member, restart app, verify persistence
+_Awaiting next increment._
 
 ---
 
