@@ -1,4 +1,5 @@
 .agent
-build/bin
+build/
 node_modules
 frontend/dist
+leadpulse

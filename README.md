@@ -10,7 +10,7 @@ A team member management application built with Go and Fyne.
 make build
 ```
 
-This compiles the application into a `leadpulse` binary.
+This compiles the application into `build/leadpulse`.
 
 ### Run
 
@@ -22,7 +22,7 @@ This builds and runs the application. The app will launch a GUI using the Fyne f
 
 Alternatively, if already built:
 ```bash
-./leadpulse
+./build/leadpulse
 ```
 
 ### Test
