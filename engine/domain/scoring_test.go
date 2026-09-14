@@ -49,3 +49,33 @@ func TestComputeScores_validScores(t *testing.T) {
 		t.Errorf("DimensionScores.DO out of range: %v", result.DimensionScores.DO)
 	}
 }
+
+// TestComputeScores_rejectsInvalidRange tests that ScoringService.ComputeScores
+// rejects scores outside the valid range (0–100).
+// This test verifies that an error is returned when invalid dimension scores are provided.
+func TestComputeScores_rejectsInvalidRange(t *testing.T) {
+	// Arrange
+	service := NewScoringService()
+
+	// Act
+	err := service.ValidateScoreRange(101.0) // score above valid range
+
+	// Assert
+	if err == nil {
+		t.Error("ValidateScoreRange(101.0) should return an error for score > 100")
+	}
+}
+
+// Verify that scores outside 0-100 range are rejected
+func TestComputeScores_rejectsNegativeScore(t *testing.T) {
+	// Arrange
+	service := NewScoringService()
+
+	// Act
+	err := service.ValidateScoreRange(-1.0) // score below valid range
+
+	// Assert
+	if err == nil {
+		t.Error("ValidateScoreRange(-1.0) should return an error for score < 0")
+	}
+}

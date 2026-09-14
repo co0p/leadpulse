@@ -29,6 +29,29 @@ func (s *ScoringService) ComputeScores() *ScoringResult {
 	}
 }
 
+// ValidateScoreRange checks that a score is within the valid range (0–100).
+// Returns an error if the score is outside this range.
+func (s *ScoringService) ValidateScoreRange(score float64) error {
+	if score < 0 || score > 100 {
+		return NewValidationError("score must be 0–100")
+	}
+	return nil
+}
+
+// NewValidationError creates a validation error.
+func NewValidationError(msg string) error {
+	return &ValidationError{message: msg}
+}
+
+// ValidationError represents a validation failure in the scoring service.
+type ValidationError struct {
+	message string
+}
+
+func (v *ValidationError) Error() string {
+	return v.message
+}
+
 // ScoringResult contains all computed scores for a monthly entry.
 // Produced by the scoring engine and persisted by the store layer.
 type ScoringResult struct {
