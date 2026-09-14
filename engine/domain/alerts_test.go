@@ -72,3 +72,21 @@ func TestEvaluatePerformanceDeterioration_redAtDelta3Boundary(t *testing.T) {
 		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluatePerformanceDeterioration_none tests that
+// EvaluatePerformanceDeterioration returns None when neither Delta1 nor
+// Delta3 cross any threshold.
+// PRD 7.1: no alert when Delta1 > -6 AND Delta3 > -10
+func TestEvaluatePerformanceDeterioration_none(t *testing.T) {
+	// Arrange: healthy trend, no deterioration
+	delta1 := 2.0
+	delta3 := 5.0
+
+	// Act
+	severity := EvaluatePerformanceDeterioration(delta1, delta3)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityNone)
+	}
+}
