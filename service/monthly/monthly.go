@@ -4,7 +4,15 @@ import (
 	"fmt"
 
 	"leadpulse/engine/domain"
+	"leadpulse/engine/scoring"
 )
+
+func valueOrZero(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
 
 // Service provides use cases for monthly entry management.
 // It depends on repository interfaces and domain services for business logic.
@@ -146,6 +154,50 @@ func (s *Service) ComputeScores(memberID int64, month string) (*domain.ScoringRe
 	}
 
 	return result, nil
+}
+
+func (s *Service) PreviewScores(signals domain.MonthlyRawSignals) *domain.ScoringResult {
+	morale := valueOrZero(signals.Morale)
+	billability := valueOrZero(signals.Billability)
+	csat := valueOrZero(signals.CSAT)
+	netMargin := valueOrZero(signals.NetMargin)
+	positiveFeedback := valueOrZero(signals.PositiveFeedback)
+	criticalFeedback := valueOrZero(signals.CriticalFeedback)
+	overtimeHours := valueOrZero(signals.OvertimeHours)
+	deliveryReliability := valueOrZero(signals.DeliveryReliability)
+	mentoringHours := valueOrZero(signals.MentoringHours)
+	evidenceNotesCount := valueOrZero(signals.EvidenceNotesCount)
+
+	normMorale := scoring.NormalizeMorale(morale)
+	normBillability := scoring.NormalizeBillability(billability)
+	normCSAT := scoring.NormalizeCSAT(csat)
+	normMargin := scoring.NormalizeMargin(netMargin)
+	normPositive := scoring.NormalizePositive(positiveFeedback)
+	normCritical := scoring.NormalizeCritical(criticalFeedback)
+	normOvertime := scoring.NormalizeOvertime(overtimeHours)
+	normDelivery := scoring.NormalizeDelivery(deliveryReliability)
+	normMentoring := scoring.NormalizeMentoring(mentoringHours)
+	normEvidence := scoring.NormalizeEvidence(evidenceNotesCount)
+
+	dg := scoring.ComputeDimensionGrowth(normMorale, normCritical, normPositive, normMentoring, normDelivery, normBillability, normOvertime, normEvidence)
+	dp := scoring.ComputeDimensionProject(normDelivery, normCSAT, normMargin, normBillability, normCritical, normPositive, normMorale)
+	dt := scoring.ComputeDimensionTeam(normMentoring, normPositive, normCritical, normMorale, normDelivery, normOvertime)
+	do := scoring.ComputeDimensionOrg(normMargin, normCSAT, normBillability, normDelivery, normMentoring, normPositive, normEvidence)
+		tii := scoring.ComputeTII(dg, dp, dt, do)
+	filled := signals.FilledSignalCount()
+	completed := scoring.ComputeCompleteness(filled)
+
+	return &domain.ScoringResult{
+		DimensionScores: domain.DimensionScores{
+			DG: dg,
+			DP: dp,
+			DT: dt,
+			DO: do,
+		},
+		TII:             tii,
+		CompletenessPct: completed,
+		Confidence:      0,
+	}
 }
 
 // GetTrends retrieves trend data for a member using the TrendService.

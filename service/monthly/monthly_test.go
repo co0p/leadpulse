@@ -250,6 +250,37 @@ func TestUpdateEntry(t *testing.T) {
 }
 
 // TestComputeScores_delegatesToScoringService tests that ComputeScores delegates to ScoringService.
+func TestService_PreviewScores_FullSignalsReturnComputedTII(t *testing.T) {
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	name, _ := domain.NewFullName("Grace", "Harris")
+	member, _ := domain.NewTeamMember(1, name, domain.SenioritySenior)
+	memberRepo.Save(member)
+
+	svc := NewService(memberRepo, entryRepo)
+
+	signals, err := domain.NewMonthlyRawSignals(
+		3, 85, 4, 15,
+		5, 1, 4,
+		90, 2, 8,
+	)
+	if err != nil {
+		t.Fatalf("NewMonthlyRawSignals failed: %v", err)
+	}
+
+	result := svc.PreviewScores(signals)
+	if result == nil {
+		t.Fatal("preview result is nil")
+	}
+	if result.TII <= 0 {
+		t.Fatalf("expected positive TII, got %v", result.TII)
+	}
+	if result.CompletenessPct != 90.9090909090909 {
+		t.Fatalf("expected 90.9090909090909 completeness for 10 filled signals, got %v", result.CompletenessPct)
+	}
+}
+
 func TestComputeScores_delegatesToScoringService(t *testing.T) {
 	// Create in-memory repositories
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
