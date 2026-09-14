@@ -95,6 +95,9 @@ func EvaluateCustomerBusinessRisk(csatN, marginN float64) AlertSeverity {
 //   Amber: CompletenessPct < 85
 //   Red: CompletenessPct < 70
 func EvaluateDataQualityRisk(completenessPct float64) AlertSeverity {
+	if completenessPct < 70 {
+		return AlertSeverityRed
+	}
 	if completenessPct < 85 {
 		return AlertSeverityAmber
 	}

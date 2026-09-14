@@ -490,3 +490,19 @@ func TestEvaluateDataQualityRisk_amberBelow85(t *testing.T) {
 		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateDataQualityRisk_redBelow70 tests that EvaluateDataQualityRisk
+// returns Red when CompletenessPct is exactly 69 (below 70).
+// PRD 7.1: Data Quality Risk Red: CompletenessPct < 70
+func TestEvaluateDataQualityRisk_redBelow70(t *testing.T) {
+	// Arrange: completeness below Red threshold
+	completenessPct := 69.0
+
+	// Act
+	severity := EvaluateDataQualityRisk(completenessPct)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityRed)
+	}
+}
