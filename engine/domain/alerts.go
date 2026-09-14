@@ -188,3 +188,13 @@ func EvaluateTeamMoraleDrift(pctMembersWithMoraleRed float64) AlertSeverity {
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateTeamDeliveryDrift evaluates the Team Delivery Drift alert
+// condition for the team's aggregate Delta3.
+// PRD 7.2: Team Delivery Drift Red: team Delta3 <= -10
+func EvaluateTeamDeliveryDrift(teamDelta3 float64) AlertSeverity {
+	if teamDelta3 <= -10 {
+		return AlertSeverityRed
+	}
+	return AlertSeverityNone
+}

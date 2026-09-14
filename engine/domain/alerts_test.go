@@ -679,3 +679,20 @@ func TestEvaluateTeamMoraleDrift_noneBelow30Percent(t *testing.T) {
 		t.Errorf("EvaluateTeamMoraleDrift(pct=%v) = %v, want %v", pctMembersWithMoraleRed, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateTeamDeliveryDrift_redAtNegativeTenDelta3 tests that
+// EvaluateTeamDeliveryDrift returns Red when the team's Delta3 is exactly
+// -10.
+// PRD 7.2: Team Delivery Drift Red: team Delta3 <= -10
+func TestEvaluateTeamDeliveryDrift_redAtNegativeTenDelta3(t *testing.T) {
+	// Arrange: team Delta3 at Red boundary
+	teamDelta3 := -10.0
+
+	// Act
+	severity := EvaluateTeamDeliveryDrift(teamDelta3)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateTeamDeliveryDrift(delta3=%v) = %v, want %v", teamDelta3, severity, AlertSeverityRed)
+	}
+}
