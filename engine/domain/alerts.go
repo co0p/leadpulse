@@ -16,5 +16,8 @@ func EvaluatePerformanceDeterioration(delta1, delta3 float64) AlertSeverity {
 	if delta1 <= -10 || delta3 <= -15 {
 		return AlertSeverityRed
 	}
+	if delta1 <= -6 {
+		return AlertSeverityAmber
+	}
 	return AlertSeverityNone
 }

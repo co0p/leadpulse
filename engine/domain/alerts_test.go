@@ -19,6 +19,24 @@ func TestEvaluatePerformanceDeterioration_redAtDelta1Boundary(t *testing.T) {
 	}
 }
 
+// TestEvaluatePerformanceDeterioration_amberAtDelta1Boundary tests that
+// EvaluatePerformanceDeterioration returns Amber when Delta1 is exactly -6
+// (below the Amber threshold but not severe enough for Red).
+// PRD 7.1: Amber: Delta1 <= -6 OR Delta3 <= -10
+func TestEvaluatePerformanceDeterioration_amberAtDelta1Boundary(t *testing.T) {
+	// Arrange: Delta1 = -6 (Amber boundary), Delta3 = 0 (not a factor)
+	delta1 := -6.0
+	delta3 := 0.0
+
+	// Act
+	severity := EvaluatePerformanceDeterioration(delta1, delta3)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityAmber)
+	}
+}
+
 // TestEvaluatePerformanceDeterioration_redAtDelta3Boundary tests that
 // EvaluatePerformanceDeterioration returns Red when Delta3 is exactly -15,
 // even when Delta1 alone would not trigger Red.
