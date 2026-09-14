@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 // AlertSeverity represents the severity level of a raised alert.
 type AlertSeverity int
 
@@ -207,4 +209,22 @@ func EvaluateSystemicBurnout(pctMembersWithBurnoutRed float64) AlertSeverity {
 		return AlertSeverityRed
 	}
 	return AlertSeverityNone
+}
+
+// EvaluateCalibrationRisk evaluates the Calibration Risk alert condition
+// for the team's TII standard deviation history. Expects the 3 most recent
+// monthly stddev values, oldest first or newest first (order does not
+// matter — all 3 months must satisfy the threshold).
+// PRD 7.2: Calibration Risk Amber: team TII stddev < 6 for 3 months
+func EvaluateCalibrationRisk(stddevHistory []float64) (AlertSeverity, error) {
+	if len(stddevHistory) < 3 {
+		return AlertSeverityNone, fmt.Errorf("insufficient data for Calibration Risk: need 3 months, got %d", len(stddevHistory))
+	}
+
+	for _, stddev := range stddevHistory {
+		if stddev >= 6 {
+			return AlertSeverityNone, nil
+		}
+	}
+	return AlertSeverityAmber, nil
 }

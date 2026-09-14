@@ -747,3 +747,23 @@ func TestEvaluateSystemicBurnout_noneBelow25Percent(t *testing.T) {
 		t.Errorf("EvaluateSystemicBurnout(pct=%v) = %v, want %v", pctMembersWithBurnoutRed, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateCalibrationRisk_amberWhenStddevBelow6ForThreeMonths tests
+// that EvaluateCalibrationRisk returns Amber when the team TII stddev has
+// been below 6 for 3 consecutive months.
+// PRD 7.2: Calibration Risk Amber: team TII stddev < 6 for 3 months
+func TestEvaluateCalibrationRisk_amberWhenStddevBelow6ForThreeMonths(t *testing.T) {
+	// Arrange: 3 months of low stddev (compressed team scores)
+	stddevHistory := []float64{5.0, 4.5, 3.0}
+
+	// Act
+	severity, err := EvaluateCalibrationRisk(stddevHistory)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("EvaluateCalibrationRisk(%v) returned error: %v", stddevHistory, err)
+	}
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateCalibrationRisk(%v) = %v, want %v", stddevHistory, severity, AlertSeverityAmber)
+	}
+}
