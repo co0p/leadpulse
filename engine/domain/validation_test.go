@@ -64,3 +64,46 @@ func TestValidateEntryUniqueness_rejectsDuplicate(t *testing.T) {
 		t.Error("ValidateEntryUniqueness should reject duplicate entries")
 	}
 }
+
+// TestValidateEntry_rejectNonexistentMember tests that ValidationService
+// rejects entries for nonexistent members.
+func TestValidateEntry_rejectNonexistentMember(t *testing.T) {
+	// Arrange
+	memberRepo := NewInMemoryTeamMemberRepository()
+	entryRepo := NewInMemoryMonthlyEntryRepository()
+	service := NewValidationService(memberRepo, entryRepo)
+
+	// Act - no member with ID 999 exists
+	err := service.ValidateEntry(TeamMemberID(999))
+
+	// Assert
+	if err == nil {
+		t.Error("ValidateEntry should reject nonexistent members")
+	}
+}
+
+// TestValidateEntry_rejectDeactivatedMember tests that ValidationService
+// rejects entries for deactivated members.
+func TestValidateEntry_rejectDeactivatedMember(t *testing.T) {
+	// Arrange
+	memberRepo := NewInMemoryTeamMemberRepository()
+	entryRepo := NewInMemoryMonthlyEntryRepository()
+	service := NewValidationService(memberRepo, entryRepo)
+
+	// Create and save a member
+	name, _ := NewFullName("Alice", "Smith")
+	member, _ := NewTeamMember(1, name, SeniorityMid)
+	memberRepo.Save(member)
+
+	// Deactivate the member
+	member.Deactivate()
+	memberRepo.Save(member)
+
+	// Act - try to validate entry for deactivated member
+	err := service.ValidateEntry(TeamMemberID(1))
+
+	// Assert
+	if err == nil {
+		t.Error("ValidateEntry should reject deactivated members")
+	}
+}
