@@ -223,3 +223,66 @@ func TestUpdateEntry(t *testing.T) {
 		t.Errorf("expected billability 95, got %d", updated.Signals().Billability)
 	}
 }
+
+// TestComputeScores_delegatesToScoringService tests that ComputeScores delegates to ScoringService.
+func TestComputeScores_delegatesToScoringService(t *testing.T) {
+	// Create in-memory repositories
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	// Create a team member
+	name, _ := domain.NewFullName("Grace", "Harris")
+	member, _ := domain.NewTeamMember(1, name, domain.SenioritySenior)
+	memberRepo.Save(member)
+
+	svc := NewService(memberRepo, entryRepo)
+
+	// Create an entry
+	svc.CreateEntry(1, "2024-10", 3, 85, 4, 15, 5, 1, 4, 90, 2, 8)
+
+	// Compute scores
+	result, err := svc.ComputeScores(1, "2024-10")
+
+	if err != nil {
+		t.Fatalf("ComputeScores failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("scoring result is nil")
+	}
+
+	// Verify dimension scores are in valid range
+	if result.DimensionScores.DG < 0 || result.DimensionScores.DG > 100 {
+		t.Errorf("DG score out of range: %v", result.DimensionScores.DG)
+	}
+}
+
+// TestGetTrends_delegatesToTrendService tests that GetTrends delegates to TrendService.
+func TestGetTrends_delegatesToTrendService(t *testing.T) {
+	// Create in-memory repositories
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	// Create a team member
+	name, _ := domain.NewFullName("Henry", "Jackson")
+	member, _ := domain.NewTeamMember(1, name, domain.SeniorityMid)
+	memberRepo.Save(member)
+
+	svc := NewService(memberRepo, entryRepo)
+
+	// Create entries for 3 months (minimum for trend calculation)
+	svc.CreateEntry(1, "2024-09", 3, 85, 4, 15, 5, 1, 4, 90, 2, 8)
+	svc.CreateEntry(1, "2024-10", 4, 80, 5, 20, 3, 0, 2, 95, 1, 6)
+	svc.CreateEntry(1, "2024-11", 5, 90, 4, 25, 4, 1, 3, 92, 3, 9)
+
+	// Get trends
+	trends, err := svc.GetTrends(1)
+
+	if err != nil {
+		t.Fatalf("GetTrends failed: %v", err)
+	}
+
+	if trends == nil {
+		t.Fatal("trend metrics is nil")
+	}
+}
