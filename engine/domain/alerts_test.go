@@ -603,3 +603,45 @@ func TestEvaluateMemberAlerts_excludesNonTriggeredConditions(t *testing.T) {
 		t.Errorf("EvaluateMemberAlerts() returned %d alerts, want 0: %+v", len(alerts), alerts)
 	}
 }
+
+// TestEvaluateMemberAlerts_detailIdentifiesConditionAndMember tests that
+// each returned Alert carries enough detail (condition type, severity, and
+// member ID) to be understood without re-deriving it from raw scores.
+// PRD/increment AC-3: alert detail sufficiency.
+func TestEvaluateMemberAlerts_detailIdentifiesConditionAndMember(t *testing.T) {
+	// Arrange: trigger exactly one condition (Data Quality Risk, Red)
+	memberID := TeamMemberID(7)
+	inputs := MemberAlertInputs{
+		MemberID:        memberID,
+		Delta1:          5,
+		Delta3:          10,
+		CurrentMoraleN:  90,
+		PriorMoraleN:    90,
+		HasPriorMonth:   true,
+		OvertimeHours:   5,
+		DeliveryN:       100,
+		CurrentCritical: 0,
+		PriorCritical:   0,
+		CSATN:           100,
+		MarginN:         100,
+		CompletenessPct: 50, // triggers Data Quality Risk Red
+	}
+
+	// Act
+	alerts := EvaluateMemberAlerts(inputs)
+
+	// Assert: exactly one alert, with full identifying detail
+	if len(alerts) != 1 {
+		t.Fatalf("EvaluateMemberAlerts() returned %d alerts, want 1: %+v", len(alerts), alerts)
+	}
+	alert := alerts[0]
+	if alert.Type != AlertTypeDataQualityRisk {
+		t.Errorf("alert.Type = %v, want %v", alert.Type, AlertTypeDataQualityRisk)
+	}
+	if alert.Severity != AlertSeverityRed {
+		t.Errorf("alert.Severity = %v, want %v", alert.Severity, AlertSeverityRed)
+	}
+	if alert.MemberID != memberID {
+		t.Errorf("alert.MemberID = %v, want %v", alert.MemberID, memberID)
+	}
+}
