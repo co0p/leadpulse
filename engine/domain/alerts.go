@@ -178,3 +178,13 @@ func EvaluateMemberAlerts(inputs MemberAlertInputs) []Alert {
 	}
 	return alerts
 }
+
+// EvaluateTeamMoraleDrift evaluates the Team Morale Drift alert condition
+// for the percentage of team members with Morale Red status.
+// PRD 7.2: Team Morale Drift Red: >=30% members have Morale Red
+func EvaluateTeamMoraleDrift(pctMembersWithMoraleRed float64) AlertSeverity {
+	if pctMembersWithMoraleRed >= 30 {
+		return AlertSeverityRed
+	}
+	return AlertSeverityNone
+}

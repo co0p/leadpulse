@@ -645,3 +645,20 @@ func TestEvaluateMemberAlerts_detailIdentifiesConditionAndMember(t *testing.T) {
 		t.Errorf("alert.MemberID = %v, want %v", alert.MemberID, memberID)
 	}
 }
+
+// TestEvaluateTeamMoraleDrift_redAt30Percent tests that
+// EvaluateTeamMoraleDrift returns Red when exactly 30% of members have
+// Morale Red.
+// PRD 7.2: Team Morale Drift Red: >=30% members have Morale Red
+func TestEvaluateTeamMoraleDrift_redAt30Percent(t *testing.T) {
+	// Arrange: 30% of members have Morale Red
+	pctMembersWithMoraleRed := 30.0
+
+	// Act
+	severity := EvaluateTeamMoraleDrift(pctMembersWithMoraleRed)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateTeamMoraleDrift(pct=%v) = %v, want %v", pctMembersWithMoraleRed, severity, AlertSeverityRed)
+	}
+}
