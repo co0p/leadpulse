@@ -9,6 +9,8 @@ import (
 	_ "modernc.org/sqlite"
 
 	"fyne.io/fyne/v2/app"
+	"leadpulse/service/member"
+	"leadpulse/service/monthly"
 	"leadpulse/store"
 	"leadpulse/ui"
 )
@@ -31,11 +33,25 @@ func main() {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 
+	// Initialize repositories (persistence layer)
+	memberRepo := store.NewSQLiteTeamMemberRepository(db)
+	entryRepo := store.NewSQLiteMonthlyEntryRepository(db)
+
+	// Initialize application services (use case layer)
+	memberService := member.NewService(memberRepo, entryRepo)
+	monthlyService := monthly.NewService(memberRepo, entryRepo)
+
+	// Create service container
+	services := &ui.ApplicationServices{
+		MemberService:  memberService,
+		MonthlyService: monthlyService,
+	}
+
 	// Create Fyne app
 	fyneApp := app.New()
 
-	// Create and show the main window
-	window := ui.NewMainWindow(fyneApp, db)
+	// Create and show the main window (UI accepts services only)
+	window := ui.NewMainWindow(fyneApp, services)
 	window.ShowAndRun()
 }
 
