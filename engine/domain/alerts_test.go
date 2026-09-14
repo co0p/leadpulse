@@ -438,3 +438,21 @@ func TestEvaluateCustomerBusinessRisk_redAtBothBoundaries(t *testing.T) {
 		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateCustomerBusinessRisk_amberNotRedWhenOnlyOneConditionMet tests
+// that EvaluateCustomerBusinessRisk returns Amber (not Red) when only the
+// CSAT condition for Red is met but MarginN is healthy.
+// PRD 7.1: Red requires BOTH CSATN < 50 AND MarginN < 40
+func TestEvaluateCustomerBusinessRisk_amberNotRedWhenOnlyOneConditionMet(t *testing.T) {
+	// Arrange: CSAT meets Red threshold, margin healthy
+	csatN := 45.0
+	marginN := 100.0
+
+	// Act
+	severity := EvaluateCustomerBusinessRisk(csatN, marginN)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityAmber)
+	}
+}
