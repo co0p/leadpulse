@@ -21,3 +21,15 @@ func EvaluatePerformanceDeterioration(delta1, delta3 float64) AlertSeverity {
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateMoraleRisk evaluates the Morale Risk alert condition for a
+// member's current and prior month MoraleN normalized scores.
+// PRD 7.1:
+//   Amber: MoraleN < 50 for 1 month
+//   Red: MoraleN < 50 for 2 consecutive months OR MoraleN < 35 current month
+func EvaluateMoraleRisk(currentMoraleN, priorMoraleN float64, hasPriorMonth bool) AlertSeverity {
+	if currentMoraleN < 35 {
+		return AlertSeverityRed
+	}
+	return AlertSeverityNone
+}

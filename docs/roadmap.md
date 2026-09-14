@@ -55,7 +55,9 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ## In Progress
 
-_Awaiting next increment._
+### Alert Engine
+- **Job story:** When scores or trends cross defined thresholds, I want the system to raise Amber or Red alerts automatically, so that I can intervene before a situation worsens.
+- **Status:** Increment defined; planning next.
 
 ---
 
@@ -80,11 +82,6 @@ _Awaiting next increment._
 - **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
 - **Evidence:** pending — unit tests for all normalization and scoring functions against PRD formulas
 - **Why first:** everything else (alerts, trends, UI, export) depends on correct formula output. No other increment can be verified without this.
-
-### Alert Engine
-- **Job story:** When scores or trends cross defined thresholds, I want the system to raise Amber or Red alerts automatically, so that I can intervene before a situation worsens.
-- **Evidence:** pending — unit tests for all six individual alert types and four team-level alerts, covering both Amber and Red thresholds
-- **Why now:** alerts are the primary early-warning output of the tool. Without them the dashboard has no actionable signal.
 
 ### Trend Calculations (MA3, Delta1, Delta3, Vol3)
 - **Job story:** When I view a team member's scorecard, I want to see their trend over time (moving average, deltas, volatility), so that I can distinguish a one-off bad month from a genuine decline.

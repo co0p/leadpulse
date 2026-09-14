@@ -90,3 +90,23 @@ func TestEvaluatePerformanceDeterioration_none(t *testing.T) {
 		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateMoraleRisk_redWhenCurrentBelow35 tests that EvaluateMoraleRisk
+// returns Red when the current month's MoraleN is below 35, regardless of
+// prior month history.
+// PRD 7.1: Morale Risk Red: MoraleN < 35 current month
+func TestEvaluateMoraleRisk_redWhenCurrentBelow35(t *testing.T) {
+	// Arrange: current month severely low morale, no prior month data
+	currentMoraleN := 30.0
+	priorMoraleN := 80.0 // healthy prior month; should not prevent Red via severe-current rule
+	hasPriorMonth := true
+
+	// Act
+	severity := EvaluateMoraleRisk(currentMoraleN, priorMoraleN, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateMoraleRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentMoraleN, priorMoraleN, hasPriorMonth, severity, AlertSeverityRed)
+	}
+}
+
