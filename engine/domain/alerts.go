@@ -39,3 +39,15 @@ func EvaluateMoraleRisk(currentMoraleN, priorMoraleN float64, hasPriorMonth bool
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateBurnoutRisk evaluates the Burnout Risk alert condition for a
+// member's overtime, morale, performance delta, and delivery reliability.
+// PRD 7.1:
+//   Amber: OvertimeHours >= 20 AND MoraleN < 60
+//   Red: OvertimeHours >= 25 AND (Delta1 < 0 OR DeliveryN < 60)
+func EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN float64) AlertSeverity {
+	if overtimeHours >= 20 && moraleN < 60 {
+		return AlertSeverityAmber
+	}
+	return AlertSeverityNone
+}

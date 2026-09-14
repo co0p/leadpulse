@@ -189,3 +189,22 @@ func TestEvaluateMoraleRisk_noneWhenAtOrAbove50(t *testing.T) {
 	}
 }
 
+// TestEvaluateBurnoutRisk_amberAtBoundary tests that EvaluateBurnoutRisk
+// returns Amber at the exact boundary: OvertimeHours = 20 AND MoraleN < 60.
+// PRD 7.1: Burnout Risk Amber: OvertimeHours >= 20 AND MoraleN < 60
+func TestEvaluateBurnoutRisk_amberAtBoundary(t *testing.T) {
+	// Arrange: overtime at Amber boundary, morale below 60
+	overtimeHours := 20.0
+	moraleN := 55.0
+	delta1 := 0.0
+	deliveryN := 100.0
+
+	// Act
+	severity := EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateBurnoutRisk(overtime=%v, morale=%v, delta1=%v, delivery=%v) = %v, want %v", overtimeHours, moraleN, delta1, deliveryN, severity, AlertSeverityAmber)
+	}
+}
+
