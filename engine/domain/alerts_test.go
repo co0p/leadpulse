@@ -130,3 +130,23 @@ func TestEvaluateMoraleRisk_redWhenTwoConsecutiveMonthsBelow50(t *testing.T) {
 	}
 }
 
+// TestEvaluateMoraleRisk_amberWhenSingleMonthBelow50 tests that
+// EvaluateMoraleRisk returns Amber when only the current month's MoraleN is
+// below 50 and there is no prior month data, so the two-consecutive-month
+// Red rule does not apply.
+// PRD 7.1: Morale Risk Amber: MoraleN < 50 for 1 month
+func TestEvaluateMoraleRisk_amberWhenSingleMonthBelow50(t *testing.T) {
+	// Arrange: current month moderately low, no prior month data
+	currentMoraleN := 45.0
+	priorMoraleN := 0.0
+	hasPriorMonth := false
+
+	// Act
+	severity := EvaluateMoraleRisk(currentMoraleN, priorMoraleN, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateMoraleRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentMoraleN, priorMoraleN, hasPriorMonth, severity, AlertSeverityAmber)
+	}
+}
+

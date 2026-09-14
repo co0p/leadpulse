@@ -34,5 +34,8 @@ func EvaluateMoraleRisk(currentMoraleN, priorMoraleN float64, hasPriorMonth bool
 	if hasPriorMonth && currentMoraleN < 50 && priorMoraleN < 50 {
 		return AlertSeverityRed
 	}
+	if currentMoraleN < 50 {
+		return AlertSeverityAmber
+	}
 	return AlertSeverityNone
 }
