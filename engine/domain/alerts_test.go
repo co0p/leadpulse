@@ -829,3 +829,27 @@ func TestEvaluateTeamAlerts_returnsAllTriggeredAlerts(t *testing.T) {
 		t.Fatalf("EvaluateTeamAlerts() returned %d alerts, want 2: %+v", len(alerts), alerts)
 	}
 }
+
+// TestEvaluateTeamAlerts_excludesNonTriggeredConditions tests that
+// EvaluateTeamAlerts returns an empty slice when all 4 conditions
+// evaluate to None (healthy team, no alerts).
+func TestEvaluateTeamAlerts_excludesNonTriggeredConditions(t *testing.T) {
+	// Arrange: all team-level inputs healthy
+	inputs := TeamAlertInputs{
+		PctMembersWithMoraleRed:  0,
+		TeamDelta3:               5,
+		PctMembersWithBurnoutRed: 0,
+		StddevHistory:            []float64{10, 10, 10},
+	}
+
+	// Act
+	alerts, err := EvaluateTeamAlerts(inputs)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("EvaluateTeamAlerts() returned error: %v", err)
+	}
+	if len(alerts) != 0 {
+		t.Errorf("EvaluateTeamAlerts() returned %d alerts, want 0: %+v", len(alerts), alerts)
+	}
+}
