@@ -21,6 +21,10 @@ const (
 	AlertTypeFeedbackRisk
 	AlertTypeCustomerBusinessRisk
 	AlertTypeDataQualityRisk
+	AlertTypeTeamMoraleDrift
+	AlertTypeTeamDeliveryDrift
+	AlertTypeSystemicBurnout
+	AlertTypeCalibrationRisk
 )
 
 // Alert represents a single triggered alert for a member, carrying enough
@@ -227,4 +231,41 @@ func EvaluateCalibrationRisk(stddevHistory []float64) (AlertSeverity, error) {
 		}
 	}
 	return AlertSeverityAmber, nil
+}
+
+// TeamAlertInputs bundles all the pre-computed values EvaluateTeamAlerts
+// needs to evaluate all 4 team-level alert conditions.
+type TeamAlertInputs struct {
+	PctMembersWithMoraleRed  float64
+	TeamDelta3               float64
+	PctMembersWithBurnoutRed float64
+	StddevHistory            []float64
+}
+
+// EvaluateTeamAlerts evaluates all 4 team-level alert conditions and
+// returns an Alert for each condition that triggers (Amber or Red).
+// Conditions that evaluate to None are excluded from the result.
+func EvaluateTeamAlerts(inputs TeamAlertInputs) ([]Alert, error) {
+	calibrationSeverity, err := EvaluateCalibrationRisk(inputs.StddevHistory)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate calibration risk: %w", err)
+	}
+
+	conditions := []struct {
+		alertType AlertType
+		severity  AlertSeverity
+	}{
+		{AlertTypeTeamMoraleDrift, EvaluateTeamMoraleDrift(inputs.PctMembersWithMoraleRed)},
+		{AlertTypeTeamDeliveryDrift, EvaluateTeamDeliveryDrift(inputs.TeamDelta3)},
+		{AlertTypeSystemicBurnout, EvaluateSystemicBurnout(inputs.PctMembersWithBurnoutRed)},
+		{AlertTypeCalibrationRisk, calibrationSeverity},
+	}
+
+	var alerts []Alert
+	for _, c := range conditions {
+		if c.severity != AlertSeverityNone {
+			alerts = append(alerts, Alert{Type: c.alertType, Severity: c.severity})
+		}
+	}
+	return alerts, nil
 }

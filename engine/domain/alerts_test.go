@@ -805,3 +805,27 @@ func TestEvaluateCalibrationRisk_errorWithFewerThanThreeMonths(t *testing.T) {
 		t.Error("EvaluateCalibrationRisk() with 2 months should return an error")
 	}
 }
+
+// TestEvaluateTeamAlerts_returnsAllTriggeredAlerts tests that
+// EvaluateTeamAlerts aggregates all 4 team-level evaluators and returns an
+// Alert for each condition that triggers.
+func TestEvaluateTeamAlerts_returnsAllTriggeredAlerts(t *testing.T) {
+	// Arrange: trigger Team Morale Drift and Team Delivery Drift only
+	inputs := TeamAlertInputs{
+		PctMembersWithMoraleRed:  30, // triggers Team Morale Drift Red
+		TeamDelta3:               -10, // triggers Team Delivery Drift Red
+		PctMembersWithBurnoutRed: 0,
+		StddevHistory:            []float64{10, 10, 10}, // healthy, no Calibration Risk
+	}
+
+	// Act
+	alerts, err := EvaluateTeamAlerts(inputs)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("EvaluateTeamAlerts() returned error: %v", err)
+	}
+	if len(alerts) != 2 {
+		t.Fatalf("EvaluateTeamAlerts() returned %d alerts, want 2: %+v", len(alerts), alerts)
+	}
+}
