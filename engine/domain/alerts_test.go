@@ -506,3 +506,20 @@ func TestEvaluateDataQualityRisk_redBelow70(t *testing.T) {
 		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateDataQualityRisk_amberNotRedAtExactly70 tests that
+// EvaluateDataQualityRisk returns Amber (not Red) when CompletenessPct is
+// exactly 70 — the Red rule requires strictly below 70.
+// PRD 7.1: Red requires CompletenessPct < 70 (strict); exactly 70 does not qualify
+func TestEvaluateDataQualityRisk_amberNotRedAtExactly70(t *testing.T) {
+	// Arrange: completeness exactly at Red boundary (not below it)
+	completenessPct := 70.0
+
+	// Act
+	severity := EvaluateDataQualityRisk(completenessPct)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityAmber)
+	}
+}
