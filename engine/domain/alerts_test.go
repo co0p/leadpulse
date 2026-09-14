@@ -327,3 +327,23 @@ func TestEvaluateFeedbackRisk_redWhenFourPlusAndNonDecreasing(t *testing.T) {
 		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateFeedbackRisk_amberNotRedWhenImproving tests that
+// EvaluateFeedbackRisk returns Amber (not Red) when CriticalFeedbackCount
+// is >= 4 but has decreased from the prior month (improving trend).
+// PRD 7.1: Red requires a non-decreasing (worsening) trend; an improving
+// trend does not qualify even with count >= 4.
+func TestEvaluateFeedbackRisk_amberNotRedWhenImproving(t *testing.T) {
+	// Arrange: current month >= 4 but lower than prior month (improving)
+	currentCritical := 4
+	priorCritical := 6
+	hasPriorMonth := true
+
+	// Act
+	severity := EvaluateFeedbackRisk(currentCritical, priorCritical, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
+	}
+}
