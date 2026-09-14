@@ -65,6 +65,9 @@ func EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN float64) Aler
 // improving: current month's count is not lower than the prior month's.
 // Without prior-month data, Red cannot be confirmed; max severity is Amber.
 func EvaluateFeedbackRisk(currentCritical, priorCritical int, hasPriorMonth bool) AlertSeverity {
+	if currentCritical >= 4 && hasPriorMonth && currentCritical >= priorCritical {
+		return AlertSeverityRed
+	}
 	if currentCritical >= 3 {
 		return AlertSeverityAmber
 	}

@@ -306,3 +306,24 @@ func TestEvaluateFeedbackRisk_amberAtThreeCritical(t *testing.T) {
 		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateFeedbackRisk_redWhenFourPlusAndNonDecreasing tests that
+// EvaluateFeedbackRisk returns Red when CriticalFeedbackCount >= 4 and the
+// current month's count is not lower than the prior month's (worsening or
+// stagnant trend).
+// PRD 7.1: Red: CriticalFeedbackCount >= 4 AND declining 2-month critical trend
+// (interpreted as non-decreasing, i.e., the problem is not improving)
+func TestEvaluateFeedbackRisk_redWhenFourPlusAndNonDecreasing(t *testing.T) {
+	// Arrange: current month >= 4, count did not decrease from prior month
+	currentCritical := 4
+	priorCritical := 4
+	hasPriorMonth := true
+
+	// Act
+	severity := EvaluateFeedbackRisk(currentCritical, priorCritical, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityRed)
+	}
+}
