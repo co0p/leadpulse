@@ -268,3 +268,23 @@ func TestEvaluateBurnoutRisk_redViaLowDeliveryN(t *testing.T) {
 	}
 }
 
+// TestEvaluateBurnoutRisk_noneWhenOvertimeLow tests that EvaluateBurnoutRisk
+// returns None when overtime is below the Amber threshold, regardless of
+// other factors.
+// PRD 7.1: no alert when OvertimeHours < 20
+func TestEvaluateBurnoutRisk_noneWhenOvertimeLow(t *testing.T) {
+	// Arrange: low overtime, other factors would trigger if overtime were high
+	overtimeHours := 10.0
+	moraleN := 30.0
+	delta1 := -5.0
+	deliveryN := 20.0
+
+	// Act
+	severity := EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateBurnoutRisk(overtime=%v, morale=%v, delta1=%v, delivery=%v) = %v, want %v", overtimeHours, moraleN, delta1, deliveryN, severity, AlertSeverityNone)
+	}
+}
+
