@@ -107,16 +107,16 @@ type MonthlyEntryID struct {
 // MonthlyRawSignals is a sub-aggregate containing all raw input signals for a month.
 // Pointer fields allow us to distinguish a value of zero from an unset field.
 type MonthlyRawSignals struct {
-	Morale               *int // 0–5
-	Billability          *int // 0–100
-	CSAT                 *int // 1–5
-	NetMargin            *int // -20 to +60
-	PositiveFeedback     *int // >= 0
-	CriticalFeedback     *int // >= 0
-	OvertimeHours        *int // >= 0
-	DeliveryReliability  *int // 0–100
-	MentoringHours       *int // >= 0
-	EvidenceNotesCount   *int // >= 0
+	Morale              *int // 0–5
+	Billability         *int // 0–100
+	CSAT                *int // 1–5
+	NetMargin           *int // -20 to +60
+	PositiveFeedback    *int // >= 0
+	CriticalFeedback    *int // >= 0
+	OvertimeHours       *int // >= 0
+	DeliveryReliability *int // 0–100
+	MentoringHours      *int // >= 0
+	EvidenceNotesCount  *int // >= 0
 }
 
 func intPtr(v int) *int {
@@ -297,12 +297,12 @@ type ComputedScores struct {
 
 // MonthlyEntry is an aggregate root representing a complete monthly scorecard.
 type MonthlyEntry struct {
-	id           MonthlyEntryID
-	signals      MonthlyRawSignals
-	impacts      map[string]ImpactRating // one per signal
-	computed     *ComputedScores         // nil until scored
-	createdAt    time.Time
-	computedAt   *time.Time // timestamp of last computation
+	id         MonthlyEntryID
+	signals    MonthlyRawSignals
+	impacts    map[string]ImpactRating // one per signal
+	computed   *ComputedScores         // nil until scored
+	createdAt  time.Time
+	computedAt *time.Time // timestamp of last computation
 }
 
 // NewMonthlyEntry creates a new monthly entry aggregate.

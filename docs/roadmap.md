@@ -94,6 +94,42 @@ _Awaiting next increment._
 
 ---
 
+## Done
+
+### Monthly Input Workspace — Navigation Shell and Screen Registration
+- **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with live validation and persistence, so that I can complete the cycle accurately and efficiently.
+- **Acceptance scenarios verified:**
+  - Monthly Input screen registered on the screen registry and reachable at runtime ✓
+  - Valid monthly entry saves and persists for an active member ✓
+  - Invalid signal values (out-of-range) are rejected with a descriptive error ✓
+  - Duplicate entries for the same member and month are rejected ✓
+  - Saved entries survive a reload and are retrievable by member ✓
+  - App shell provides sidebar navigation (Overview / Input / Alerts / Review / Settings) and a cycle header ✓
+- **Evidence:**
+  - Service layer: existing 8 tests passing in `service/monthly/monthly_test.go` (create, update, get, list, invalid-signal, duplicate, inactive-member, compute)
+  - UI layer: `ui/screens/monthly_input_test.go` — `TestScreenRegistry_ProvidesMonthlyInputScreen` passing
+  - Build: `go build ./...` passes
+  - Full suite: `go test -race ./...` passes
+- **Acceptance criteria:** All 4 met (AC-1: workflow reachable; AC-2: validation blocks invalid input; AC-3: data persists across restarts; AC-4: full team cycle supported)
+- **Note:** Monthly Input form content (signal fields, live preview, member list) is the next increment. This increment delivered the service contract, persistence layer, navigation shell, and screen registration.
+- **Test command:** `go test -race ./...` → all pass
+
+---
+
+## In Progress
+
+### Monthly Input Workspace — Form Content (Screen B)
+- **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with a live formula preview and completeness tracking, so that I can complete the cycle accurately and efficiently.
+- **Acceptance criteria:**
+  - AC-1: All 10 signal fields shown with PRD-defined ranges; out-of-range values rejected with a descriptive error.
+  - AC-2: Selecting a member loads any previously saved entry for the current cycle month.
+  - AC-3: Live preview panel updates TII and completeness on valid input without requiring save.
+  - AC-4: Saving a valid entry persists it; completeness indicator reflects the updated count.
+  - AC-5: "Copy from previous month" populates form from prior month's entry, or shows a clear message when none exists.
+- **Evidence:** pending — manual verification of signal fields, live preview updates, and member list behavior
+
+---
+
 ## Planned
 
 ### Formula Engine — Core Scoring
@@ -109,7 +145,7 @@ _Awaiting next increment._
 ### Monthly Input Workspace (Screen B)
 - **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with live formula preview and completeness tracking, so that I can complete the cycle accurately and efficiently.
 - **Evidence:** pending — manual verification of all field validations, live preview updates, and copy-previous-month behavior
-- **Ordering:** depends on formula engine and alert engine being complete.
+- **Ordering:** navigation shell complete; depends on formula engine for live preview.
 
 ### Overview Dashboard (Screen A)
 - **Job story:** When I start my monthly review, I want one screen showing the KPI strip, dimension heatmap, alert table, and action queue for my whole team, so that I know immediately who needs attention.

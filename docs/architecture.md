@@ -81,7 +81,8 @@ No external network connections. No cloud. No server.
 - **Responsibility:** Render all screens (Overview Dashboard, Monthly Input Workspace, Member Detail, Alerts Center, Monthly Review, Settings). Handle user interaction. Delegate all business logic to `service/`.
 - **Service dependency:** UI accepts `ApplicationServices` struct containing all service interfaces (`MemberService`, `MonthlyService`). This decouples the UI from persistence concerns; the UI never sees repositories or database connections.
 - **Screens:** A (Overview), B (Monthly Input), C (Member Detail), D (Alerts Center), E (Monthly Review), F (Settings)
-- **Implemented screens:** F (Settings) — team member list, add/edit/deactivate dialogs, calls `service.MemberService`
+- **Implemented screens:** F (Settings) — team member list, add/edit/deactivate dialogs; B (Monthly Input) — stub screen registered and reachable via sidebar navigation
+- **Navigation shell:** sidebar + header pattern. Left sidebar (fixed width) holds primary nav buttons (Overview, Input, Alerts, Review) and Settings at the bottom. Top header shows the current cycle month. Main content area swaps on nav selection. Shell is defined in `ui/app.go`; screens are registered in `ui/screens/registry.go`.
 - **Initialization:** main.go creates repositories → creates services → aggregates services into ApplicationServices → passes to UI. This preserves the separation: UI depends on services only.
 - **Constraints:** No business logic. No direct SQLite access. No repository access. No database connections. Calls `service/` for all use cases. Testable by swapping `service/` implementation. Can be replaced with a CLI, web UI, or any other presentation layer that calls the same `service/` interfaces.
 - **Future alternative:** A CLI client (`cmd/cli/`) can implement the same `service/` interfaces for headless or scripted workflows.

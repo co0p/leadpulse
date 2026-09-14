@@ -6,7 +6,8 @@ import (
 
 // TestComputeImpactWeighted_allZero tests that all-zero impact ratings produce 0 impact score.
 // PRD 5.3: ImpactWeighted = 0.20*IG + 0.35*IP + 0.25*IT + 0.20*IO (0–5)
-//          ImpactWeighted100 = ImpactWeighted * 20 (0–100)
+//
+//	ImpactWeighted100 = ImpactWeighted * 20 (0–100)
 func TestComputeImpactWeighted_allZero(t *testing.T) {
 	result := ComputeImpactWeighted(0, 0, 0, 0)
 	if !almostEqual(result, 0.0, 0.01) {

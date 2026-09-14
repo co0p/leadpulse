@@ -4,7 +4,8 @@ package scoring
 // Takes the four impact ratings (IG, IP, IT, IO) and returns a 0-100 score.
 //
 // PRD 5.3: ImpactWeighted = 0.20*IG + 0.35*IP + 0.25*IT + 0.20*IO (0–5)
-//          ImpactWeighted100 = ImpactWeighted * 20 (0–100)
+//
+//	ImpactWeighted100 = ImpactWeighted * 20 (0–100)
 //
 // Impact layer weights (default for all signals):
 // - Growth (IG) 20%

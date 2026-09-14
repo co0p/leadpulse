@@ -17,16 +17,16 @@ func TestMonthlyEntryRepositorySave(t *testing.T) {
 
 	// Create a monthly entry aggregate
 	signals, _ := domain.NewMonthlyRawSignals(
-		3,   // morale
-		85,  // billability
-		4,   // csat
-		15,  // net_margin
-		5,   // positive_feedback
-		1,   // critical_feedback
-		4,   // overtime_hours
-		90,  // delivery_reliability
-		2,   // mentoring_hours
-		8,   // evidence_notes_count
+		3,  // morale
+		85, // billability
+		4,  // csat
+		15, // net_margin
+		5,  // positive_feedback
+		1,  // critical_feedback
+		4,  // overtime_hours
+		90, // delivery_reliability
+		2,  // mentoring_hours
+		8,  // evidence_notes_count
 	)
 
 	entry, _ := domain.NewMonthlyEntry(1, "2024-10", signals)

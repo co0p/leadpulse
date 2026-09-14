@@ -40,18 +40,18 @@ func NewService(memberRepo domain.TeamMemberRepository, entryRepo domain.Monthly
 func (s *Service) CreateEntry(
 	memberID int64,
 	month string,
-	morale, billability, csat, netMargin,
-	positiveFeedback, criticalFeedback,
-	overtimeHours, deliveryReliability,
-	mentoringHours, evidenceNotesCount int,
+	morale, billability, csat, netMargin *int,
+	positiveFeedback, criticalFeedback *int,
+	overtimeHours, deliveryReliability *int,
+	mentoringHours, evidenceNotesCount *int,
 ) (*domain.MonthlyEntry, error) {
 	// Validate month format
 	if len(month) != 7 || month[4] != '-' {
 		return nil, fmt.Errorf("month must be in YYYY-MM format")
 	}
 
-	// Create raw signals (validates all signal constraints)
-	signals, err := domain.NewMonthlyRawSignals(
+	// Create raw signals allowing nils for unset values
+	signals, err := domain.NewMonthlyRawSignalsFromPointers(
 		morale, billability, csat, netMargin,
 		positiveFeedback, criticalFeedback,
 		overtimeHours, deliveryReliability,
@@ -104,18 +104,18 @@ func (s *Service) ListEntriesByMember(memberID int64) ([]*domain.MonthlyEntry, e
 func (s *Service) UpdateEntry(
 	memberID int64,
 	month string,
-	morale, billability, csat, netMargin,
-	positiveFeedback, criticalFeedback,
-	overtimeHours, deliveryReliability,
-	mentoringHours, evidenceNotesCount int,
+	morale, billability, csat, netMargin *int,
+	positiveFeedback, criticalFeedback *int,
+	overtimeHours, deliveryReliability *int,
+	mentoringHours, evidenceNotesCount *int,
 ) (*domain.MonthlyEntry, error) {
 	// Validate month format
 	if len(month) != 7 || month[4] != '-' {
 		return nil, fmt.Errorf("month must be in YYYY-MM format")
 	}
 
-	// Create raw signals (validates all signal constraints)
-	signals, err := domain.NewMonthlyRawSignals(
+	// Create raw signals allowing nils for unset values
+	signals, err := domain.NewMonthlyRawSignalsFromPointers(
 		morale, billability, csat, netMargin,
 		positiveFeedback, criticalFeedback,
 		overtimeHours, deliveryReliability,
@@ -183,7 +183,7 @@ func (s *Service) PreviewScores(signals domain.MonthlyRawSignals) *domain.Scorin
 	dp := scoring.ComputeDimensionProject(normDelivery, normCSAT, normMargin, normBillability, normCritical, normPositive, normMorale)
 	dt := scoring.ComputeDimensionTeam(normMentoring, normPositive, normCritical, normMorale, normDelivery, normOvertime)
 	do := scoring.ComputeDimensionOrg(normMargin, normCSAT, normBillability, normDelivery, normMentoring, normPositive, normEvidence)
-		tii := scoring.ComputeTII(dg, dp, dt, do)
+	tii := scoring.ComputeTII(dg, dp, dt, do)
 	filled := signals.FilledSignalCount()
 	completed := scoring.ComputeCompleteness(filled)
 

@@ -288,7 +288,6 @@ func TestEvaluateBurnoutRisk_noneWhenOvertimeLow(t *testing.T) {
 	}
 }
 
-
 // TestEvaluateFeedbackRisk_amberAtThreeCritical tests that
 // EvaluateFeedbackRisk returns Amber when CriticalFeedbackCount is exactly 3.
 // PRD 7.1: Feedback Risk Amber: CriticalFeedbackCount >= 3
@@ -549,19 +548,19 @@ func TestEvaluateMemberAlerts_returnsAllTriggeredAlerts(t *testing.T) {
 	// and Data Quality Risk (Amber), with all other conditions healthy
 	memberID := TeamMemberID(1)
 	inputs := MemberAlertInputs{
-		MemberID:         memberID,
-		Delta1:           -10, // triggers Performance Deterioration Red
-		Delta3:           0,
-		CurrentMoraleN:   100,
-		PriorMoraleN:     0,
-		HasPriorMonth:    false,
-		OvertimeHours:    0,
-		DeliveryN:        100,
-		CurrentCritical:  0,
-		PriorCritical:    0,
-		CSATN:            100,
-		MarginN:          100,
-		CompletenessPct:  80, // triggers Data Quality Risk Amber
+		MemberID:        memberID,
+		Delta1:          -10, // triggers Performance Deterioration Red
+		Delta3:          0,
+		CurrentMoraleN:  100,
+		PriorMoraleN:    0,
+		HasPriorMonth:   false,
+		OvertimeHours:   0,
+		DeliveryN:       100,
+		CurrentCritical: 0,
+		PriorCritical:   0,
+		CSATN:           100,
+		MarginN:         100,
+		CompletenessPct: 80, // triggers Data Quality Risk Amber
 	}
 
 	// Act
@@ -812,7 +811,7 @@ func TestEvaluateCalibrationRisk_errorWithFewerThanThreeMonths(t *testing.T) {
 func TestEvaluateTeamAlerts_returnsAllTriggeredAlerts(t *testing.T) {
 	// Arrange: trigger Team Morale Drift and Team Delivery Drift only
 	inputs := TeamAlertInputs{
-		PctMembersWithMoraleRed:  30, // triggers Team Morale Drift Red
+		PctMembersWithMoraleRed:  30,  // triggers Team Morale Drift Red
 		TeamDelta3:               -10, // triggers Team Delivery Drift Red
 		PctMembersWithBurnoutRed: 0,
 		StddevHistory:            []float64{10, 10, 10}, // healthy, no Calibration Risk

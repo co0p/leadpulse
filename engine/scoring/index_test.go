@@ -64,40 +64,40 @@ func TestComputeCompleteness_partiallyFilled(t *testing.T) {
 // Expected: normalized scores, dimension scores, TII computed correctly
 func TestComputeScores_endToEndTypicalMember(t *testing.T) {
 	// Compute normalized scores
-	moraleN := NormalizeMorale(4)      // 80
+	moraleN := NormalizeMorale(4)            // 80
 	billabilityN := NormalizeBillability(75) // 100
-	csatN := NormalizeCSAT(4)          // 75
-	marginN := NormalizeMargin(20)     // 50
-	positiveN := NormalizePositive(2)  // 25
-	criticalN := NormalizeCritical(1)  // 83.33
-	overtimeN := NormalizeOvertime(10) // 66.67
-	deliveryN := NormalizeDelivery(90) // 90
-	mentoringN := NormalizeMentoring(4) // 33.33
-	evidenceN := NormalizeEvidence(2)  // 33.33
+	csatN := NormalizeCSAT(4)                // 75
+	marginN := NormalizeMargin(20)           // 50
+	positiveN := NormalizePositive(2)        // 25
+	criticalN := NormalizeCritical(1)        // 83.33
+	overtimeN := NormalizeOvertime(10)       // 66.67
+	deliveryN := NormalizeDelivery(90)       // 90
+	mentoringN := NormalizeMentoring(4)      // 33.33
+	evidenceN := NormalizeEvidence(2)        // 33.33
 
 	// Compute impact-weighted scores (all impact ratings = 3)
-	moraleImpact := ComputeImpactWeighted(3, 3, 3, 3)       // 60
+	moraleImpact := ComputeImpactWeighted(3, 3, 3, 3)      // 60
 	billabilityImpact := ComputeImpactWeighted(3, 3, 3, 3) // 60
-	csatImpact := ComputeImpactWeighted(3, 3, 3, 3)         // 60
-	marginImpact := ComputeImpactWeighted(3, 3, 3, 3)       // 60
-	positiveImpact := ComputeImpactWeighted(3, 3, 3, 3)     // 60
-	criticalImpact := ComputeImpactWeighted(3, 3, 3, 3)     // 60
-	overtimeImpact := ComputeImpactWeighted(3, 3, 3, 3)     // 60
-	deliveryImpact := ComputeImpactWeighted(3, 3, 3, 3)     // 60
-	mentoringImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
-	evidenceImpact := ComputeImpactWeighted(3, 3, 3, 3)     // 60
+	csatImpact := ComputeImpactWeighted(3, 3, 3, 3)        // 60
+	marginImpact := ComputeImpactWeighted(3, 3, 3, 3)      // 60
+	positiveImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
+	criticalImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
+	overtimeImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
+	deliveryImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
+	mentoringImpact := ComputeImpactWeighted(3, 3, 3, 3)   // 60
+	evidenceImpact := ComputeImpactWeighted(3, 3, 3, 3)    // 60
 
 	// Compute contribution scores
-	moraleC := (moraleN * moraleImpact) / 100        // 48
+	moraleC := (moraleN * moraleImpact) / 100                // 48
 	billabilityC := (billabilityN * billabilityImpact) / 100 // 60
-	csatC := (csatN * csatImpact) / 100              // 45
-	marginC := (marginN * marginImpact) / 100        // 30
-	positiveC := (positiveN * positiveImpact) / 100  // 15
-	criticalC := (criticalN * criticalImpact) / 100  // 50
-	overtimeC := (overtimeN * overtimeImpact) / 100  // 40
-	deliveryC := (deliveryN * deliveryImpact) / 100  // 54
-	mentoringC := (mentoringN * mentoringImpact) / 100 // 20
-	evidenceC := (evidenceN * evidenceImpact) / 100  // 20
+	csatC := (csatN * csatImpact) / 100                      // 45
+	marginC := (marginN * marginImpact) / 100                // 30
+	positiveC := (positiveN * positiveImpact) / 100          // 15
+	criticalC := (criticalN * criticalImpact) / 100          // 50
+	overtimeC := (overtimeN * overtimeImpact) / 100          // 40
+	deliveryC := (deliveryN * deliveryImpact) / 100          // 54
+	mentoringC := (mentoringN * mentoringImpact) / 100       // 20
+	evidenceC := (evidenceN * evidenceImpact) / 100          // 20
 
 	// Compute dimension scores
 	dg := ComputeDimensionGrowth(moraleC, criticalC, positiveC, mentoringC, deliveryC, billabilityC, overtimeC, evidenceC)
@@ -125,31 +125,31 @@ func TestComputeScores_endToEndTypicalMember(t *testing.T) {
 // minimal critical feedback, reasonable overtime, excellent delivery, mentoring hours.
 func TestComputeScores_endToEndStrongPerformer(t *testing.T) {
 	// Normalized scores
-	moraleN := NormalizeMorale(5)       // 100
+	moraleN := NormalizeMorale(5)            // 100
 	billabilityN := NormalizeBillability(75) // 100
-	csatN := NormalizeCSAT(5)          // 100
-	marginN := NormalizeMargin(50)     // 100
-	positiveN := NormalizePositive(8)  // 100
-	criticalN := NormalizeCritical(0)  // 100
-	overtimeN := NormalizeOvertime(5)  // 83.33
-	deliveryN := NormalizeDelivery(95) // 95
-	mentoringN := NormalizeMentoring(12) // 100
-	evidenceN := NormalizeEvidence(6)  // 100
+	csatN := NormalizeCSAT(5)                // 100
+	marginN := NormalizeMargin(50)           // 100
+	positiveN := NormalizePositive(8)        // 100
+	criticalN := NormalizeCritical(0)        // 100
+	overtimeN := NormalizeOvertime(5)        // 83.33
+	deliveryN := NormalizeDelivery(95)       // 95
+	mentoringN := NormalizeMentoring(12)     // 100
+	evidenceN := NormalizeEvidence(6)        // 100
 
 	// Impact-weighted (all ratings = 5, max impact)
 	maxImpact := ComputeImpactWeighted(5, 5, 5, 5) // 100
 
 	// Contribution scores (all at max)
-	moraleC := (moraleN * maxImpact) / 100        // 100
+	moraleC := (moraleN * maxImpact) / 100           // 100
 	billabilityC := (billabilityN * maxImpact) / 100 // 100
-	csatC := (csatN * maxImpact) / 100            // 100
-	marginC := (marginN * maxImpact) / 100        // 100
-	positiveC := (positiveN * maxImpact) / 100    // 100
-	criticalC := (criticalN * maxImpact) / 100    // 100
-	overtimeC := (overtimeN * maxImpact) / 100    // 83.33
-	deliveryC := (deliveryN * maxImpact) / 100    // 95
-	mentoringC := (mentoringN * maxImpact) / 100  // 100
-	evidenceC := (evidenceN * maxImpact) / 100    // 100
+	csatC := (csatN * maxImpact) / 100               // 100
+	marginC := (marginN * maxImpact) / 100           // 100
+	positiveC := (positiveN * maxImpact) / 100       // 100
+	criticalC := (criticalN * maxImpact) / 100       // 100
+	overtimeC := (overtimeN * maxImpact) / 100       // 83.33
+	deliveryC := (deliveryN * maxImpact) / 100       // 95
+	mentoringC := (mentoringN * maxImpact) / 100     // 100
+	evidenceC := (evidenceN * maxImpact) / 100       // 100
 
 	// Dimension scores
 	dg := ComputeDimensionGrowth(moraleC, criticalC, positiveC, mentoringC, deliveryC, billabilityC, overtimeC, evidenceC)
@@ -171,31 +171,31 @@ func TestComputeScores_endToEndStrongPerformer(t *testing.T) {
 // multiple critical feedback items, high overtime, low delivery, no mentoring.
 func TestComputeScores_endToEndStrugglingMember(t *testing.T) {
 	// Normalized scores
-	moraleN := NormalizeMorale(1)       // 20
+	moraleN := NormalizeMorale(1)            // 20
 	billabilityN := NormalizeBillability(50) // 66.67 (50% → 25 deviation → reduced)
-	csatN := NormalizeCSAT(1)          // 0
-	marginN := NormalizeMargin(-15)    // ~25
-	positiveN := NormalizePositive(0)  // 0
-	criticalN := NormalizeCritical(4)  // 33.33
-	overtimeN := NormalizeOvertime(25) // 16.67
-	deliveryN := NormalizeDelivery(50) // 50
-	mentoringN := NormalizeMentoring(0) // 0
-	evidenceN := NormalizeEvidence(0)  // 0
+	csatN := NormalizeCSAT(1)                // 0
+	marginN := NormalizeMargin(-15)          // ~25
+	positiveN := NormalizePositive(0)        // 0
+	criticalN := NormalizeCritical(4)        // 33.33
+	overtimeN := NormalizeOvertime(25)       // 16.67
+	deliveryN := NormalizeDelivery(50)       // 50
+	mentoringN := NormalizeMentoring(0)      // 0
+	evidenceN := NormalizeEvidence(0)        // 0
 
 	// Impact-weighted (all ratings = 1, minimal impact)
 	minImpact := ComputeImpactWeighted(1, 1, 1, 1) // 20
 
 	// Contribution scores (all low)
-	moraleC := (moraleN * minImpact) / 100        // 4
+	moraleC := (moraleN * minImpact) / 100           // 4
 	billabilityC := (billabilityN * minImpact) / 100 // 13.33
-	csatC := (csatN * minImpact) / 100            // 0
-	marginC := (marginN * minImpact) / 100        // 5
-	positiveC := (positiveN * minImpact) / 100    // 0
-	criticalC := (criticalN * minImpact) / 100    // 6.67
-	overtimeC := (overtimeN * minImpact) / 100    // 3.33
-	deliveryC := (deliveryN * minImpact) / 100    // 10
-	mentoringC := (mentoringN * minImpact) / 100  // 0
-	evidenceC := (evidenceN * minImpact) / 100    // 0
+	csatC := (csatN * minImpact) / 100               // 0
+	marginC := (marginN * minImpact) / 100           // 5
+	positiveC := (positiveN * minImpact) / 100       // 0
+	criticalC := (criticalN * minImpact) / 100       // 6.67
+	overtimeC := (overtimeN * minImpact) / 100       // 3.33
+	deliveryC := (deliveryN * minImpact) / 100       // 10
+	mentoringC := (mentoringN * minImpact) / 100     // 0
+	evidenceC := (evidenceN * minImpact) / 100       // 0
 
 	// Dimension scores
 	dg := ComputeDimensionGrowth(moraleC, criticalC, positiveC, mentoringC, deliveryC, billabilityC, overtimeC, evidenceC)

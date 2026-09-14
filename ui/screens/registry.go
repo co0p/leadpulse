@@ -8,14 +8,14 @@ import (
 
 // ScreenRegistry manages all application screens.
 type ScreenRegistry struct {
-	memberService *member.Service
+	memberService  *member.Service
 	monthlyService *monthly.Service
 }
 
 // NewScreenRegistry creates a new screen registry.
 func NewScreenRegistry(memberService *member.Service, monthlyService *monthly.Service) *ScreenRegistry {
 	return &ScreenRegistry{
-		memberService: memberService,
+		memberService:  memberService,
 		monthlyService: monthlyService,
 	}
 }

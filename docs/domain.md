@@ -79,6 +79,15 @@ A cycle that has been locked by the Team Lead after all members have sufficient 
 
 ---
 
+## Entry Status: Draft vs Done
+
+- Draft: a monthly entry that exists in the store but has at least one nil (unset) signal. Draft entries are visible in the member list with a "Draft" badge. Draft entries are allowed and represent partially-complete input.
+- Done: a monthly entry where all 10 signals are non-nil. Done entries show a "Done" badge and are considered complete for finalization checks.
+
+Notes:
+- The UI Save button is disabled until completeness ≥ 70% to encourage sufficient data entry before persisting.
+- Completeness is computed as the percentage of required filled fields (FilledRequiredFields / 11 × 100) and is used by confidence and finalization rules.
+
 ## Signals (Raw Inputs)
 
 **Morale Self-Score**

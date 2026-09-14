@@ -28,6 +28,14 @@ func valueOrZero(v *int) int {
 	return *v
 }
 
+// nullableInt converts a *int to sql.NullInt64 for DB writes.
+func nullableInt(v *int) interface{} {
+	if v == nil {
+		return nil
+	}
+	return int64(*v)
+}
+
 func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 	if entry == nil {
 		return fmt.Errorf("cannot save nil monthly entry")
@@ -64,27 +72,27 @@ func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 	if existing == nil {
 		// Insert new entry
 		_, err := r.db.Exec(`
-			INSERT INTO monthly_entries (
-				member_id, month,
-				morale, billability, csat, net_margin,
-				positive_feedback, critical_feedback,
-				overtime_hours, delivery_reliability,
-				mentoring_hours, evidence_notes_count,
-				computed_scores, created_at, computed_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`,
+            INSERT INTO monthly_entries (
+                member_id, month,
+                morale, billability, csat, net_margin,
+                positive_feedback, critical_feedback,
+                overtime_hours, delivery_reliability,
+                mentoring_hours, evidence_notes_count,
+                computed_scores, created_at, computed_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
 			int64(id.MemberID),
 			id.Month,
-			valueOrZero(signals.Morale),
-			valueOrZero(signals.Billability),
-			valueOrZero(signals.CSAT),
-			valueOrZero(signals.NetMargin),
-			valueOrZero(signals.PositiveFeedback),
-			valueOrZero(signals.CriticalFeedback),
-			valueOrZero(signals.OvertimeHours),
-			valueOrZero(signals.DeliveryReliability),
-			valueOrZero(signals.MentoringHours),
-			valueOrZero(signals.EvidenceNotesCount),
+			nullableInt(signals.Morale),
+			nullableInt(signals.Billability),
+			nullableInt(signals.CSAT),
+			nullableInt(signals.NetMargin),
+			nullableInt(signals.PositiveFeedback),
+			nullableInt(signals.CriticalFeedback),
+			nullableInt(signals.OvertimeHours),
+			nullableInt(signals.DeliveryReliability),
+			nullableInt(signals.MentoringHours),
+			nullableInt(signals.EvidenceNotesCount),
 			computedScoresJSON,
 			entry.CreatedAt().UTC().Format(time.RFC3339),
 			computedAtStr,
@@ -95,24 +103,24 @@ func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 	} else {
 		// Update existing entry
 		_, err := r.db.Exec(`
-			UPDATE monthly_entries SET
-				morale = ?, billability = ?, csat = ?, net_margin = ?,
-				positive_feedback = ?, critical_feedback = ?,
-				overtime_hours = ?, delivery_reliability = ?,
-				mentoring_hours = ?, evidence_notes_count = ?,
-				computed_scores = ?, computed_at = ?
-			WHERE member_id = ? AND month = ?
-		`,
-			valueOrZero(signals.Morale),
-			valueOrZero(signals.Billability),
-			valueOrZero(signals.CSAT),
-			valueOrZero(signals.NetMargin),
-			valueOrZero(signals.PositiveFeedback),
-			valueOrZero(signals.CriticalFeedback),
-			valueOrZero(signals.OvertimeHours),
-			valueOrZero(signals.DeliveryReliability),
-			valueOrZero(signals.MentoringHours),
-			valueOrZero(signals.EvidenceNotesCount),
+            UPDATE monthly_entries SET
+                morale = ?, billability = ?, csat = ?, net_margin = ?,
+                positive_feedback = ?, critical_feedback = ?,
+                overtime_hours = ?, delivery_reliability = ?,
+                mentoring_hours = ?, evidence_notes_count = ?,
+                computed_scores = ?, computed_at = ?
+            WHERE member_id = ? AND month = ?
+        `,
+			nullableInt(signals.Morale),
+			nullableInt(signals.Billability),
+			nullableInt(signals.CSAT),
+			nullableInt(signals.NetMargin),
+			nullableInt(signals.PositiveFeedback),
+			nullableInt(signals.CriticalFeedback),
+			nullableInt(signals.OvertimeHours),
+			nullableInt(signals.DeliveryReliability),
+			nullableInt(signals.MentoringHours),
+			nullableInt(signals.EvidenceNotesCount),
 			computedScoresJSON,
 			computedAtStr,
 			int64(id.MemberID),
@@ -129,24 +137,24 @@ func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 // FindByID retrieves a monthly entry by its composite ID (member_id, month).
 // Returns nil if not found.
 func (r *SQLiteMonthlyEntryRepository) FindByID(id domain.MonthlyEntryID) (*domain.MonthlyEntry, error) {
-	var morale, billability, csat, netMargin int
-	var positiveFeedback, criticalFeedback int
-	var overtimeHours, deliveryReliability int
-	var mentoringHours, evidenceNotesCount int
+	var morale, billability, csat, netMargin sql.NullInt64
+	var positiveFeedback, criticalFeedback sql.NullInt64
+	var overtimeHours, deliveryReliability sql.NullInt64
+	var mentoringHours, evidenceNotesCount sql.NullInt64
 	var createdAtStr string
 	var computedScoresJSON sql.NullString
 	var computedAtStr sql.NullString
 
 	err := r.db.QueryRow(`
-		SELECT
-			morale, billability, csat, net_margin,
-			positive_feedback, critical_feedback,
-			overtime_hours, delivery_reliability,
-			mentoring_hours, evidence_notes_count,
-			computed_scores, created_at, computed_at
-		FROM monthly_entries
-		WHERE member_id = ? AND month = ?
-	`, int64(id.MemberID), id.Month).Scan(
+        SELECT
+            morale, billability, csat, net_margin,
+            positive_feedback, critical_feedback,
+            overtime_hours, delivery_reliability,
+            mentoring_hours, evidence_notes_count,
+            computed_scores, created_at, computed_at
+        FROM monthly_entries
+        WHERE member_id = ? AND month = ?
+    `, int64(id.MemberID), id.Month).Scan(
 		&morale, &billability, &csat, &netMargin,
 		&positiveFeedback, &criticalFeedback,
 		&overtimeHours, &deliveryReliability,
@@ -161,12 +169,18 @@ func (r *SQLiteMonthlyEntryRepository) FindByID(id domain.MonthlyEntryID) (*doma
 		return nil, fmt.Errorf("failed to query monthly entry: %w", err)
 	}
 
-	// Reconstruct raw signals
-	signals, err := domain.NewMonthlyRawSignals(
-		morale, billability, csat, netMargin,
-		positiveFeedback, criticalFeedback,
-		overtimeHours, deliveryReliability,
-		mentoringHours, evidenceNotesCount,
+	// Convert sql.NullInt64 -> *int for domain type
+	toPtr := func(n sql.NullInt64) *int {
+		if !n.Valid {
+			return nil
+		}
+		v := int(n.Int64)
+		return &v
+	}
+	signals, err := domain.NewMonthlyRawSignalsFromPointers(
+		toPtr(morale), toPtr(billability), toPtr(csat), toPtr(netMargin),
+		toPtr(positiveFeedback), toPtr(criticalFeedback), toPtr(overtimeHours), toPtr(deliveryReliability),
+		toPtr(mentoringHours), toPtr(evidenceNotesCount),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct signals: %w", err)
@@ -228,10 +242,10 @@ func (r *SQLiteMonthlyEntryRepository) FindByMember(memberID domain.TeamMemberID
 
 	var entries []*domain.MonthlyEntry
 	for rows.Next() {
-		var morale, billability, csat, netMargin int
-		var positiveFeedback, criticalFeedback int
-		var overtimeHours, deliveryReliability int
-		var mentoringHours, evidenceNotesCount int
+		var morale, billability, csat, netMargin sql.NullInt64
+		var positiveFeedback, criticalFeedback sql.NullInt64
+		var overtimeHours, deliveryReliability sql.NullInt64
+		var mentoringHours, evidenceNotesCount sql.NullInt64
 		var month, createdAtStr string
 		var computedScoresJSON sql.NullString
 		var computedAtStr sql.NullString
@@ -247,12 +261,17 @@ func (r *SQLiteMonthlyEntryRepository) FindByMember(memberID domain.TeamMemberID
 			return nil, fmt.Errorf("failed to scan monthly entry row: %w", err)
 		}
 
-		// Reconstruct raw signals
-		signals, err := domain.NewMonthlyRawSignals(
-			morale, billability, csat, netMargin,
-			positiveFeedback, criticalFeedback,
-			overtimeHours, deliveryReliability,
-			mentoringHours, evidenceNotesCount,
+		toPtr := func(n sql.NullInt64) *int {
+			if !n.Valid {
+				return nil
+			}
+			v := int(n.Int64)
+			return &v
+		}
+		signals, err := domain.NewMonthlyRawSignalsFromPointers(
+			toPtr(morale), toPtr(billability), toPtr(csat), toPtr(netMargin),
+			toPtr(positiveFeedback), toPtr(criticalFeedback), toPtr(overtimeHours), toPtr(deliveryReliability),
+			toPtr(mentoringHours), toPtr(evidenceNotesCount),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to reconstruct signals: %w", err)

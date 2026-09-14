@@ -68,9 +68,9 @@ type ScoringResult struct {
 	DimensionScores DimensionScores
 
 	// Overall metrics
-	TII                 float64 // Total Impact Index (0–100)
-	CompletenessPct     float64 // (FilledRequiredFields / 11) * 100
-	Confidence          float64 // Quality confidence badge (pending PRD clarification)
+	TII             float64 // Total Impact Index (0–100)
+	CompletenessPct float64 // (FilledRequiredFields / 11) * 100
+	Confidence      float64 // Quality confidence badge (pending PRD clarification)
 }
 
 // NormalizedScores holds the 0–100 normalized value for each raw signal.
@@ -93,16 +93,16 @@ type NormalizedScores struct {
 // Growth 20%, Project 35%, Team 25%, Organization 20%.
 // Formula: ImpactWeighted100 = (0.20*IG + 0.35*IP + 0.25*IT + 0.20*IO) * 20
 type ImpactWeightedScores struct {
-	MoraleImpactWeighted    float64
+	MoraleImpactWeighted      float64
 	BillabilityImpactWeighted float64
-	CSATImpactWeighted      float64
-	MarginImpactWeighted    float64
-	PositiveImpactWeighted  float64
-	CriticalImpactWeighted  float64
-	OvertimeImpactWeighted  float64
-	DeliveryImpactWeighted  float64
-	MentoringImpactWeighted float64
-	EvidenceImpactWeighted  float64
+	CSATImpactWeighted        float64
+	MarginImpactWeighted      float64
+	PositiveImpactWeighted    float64
+	CriticalImpactWeighted    float64
+	OvertimeImpactWeighted    float64
+	DeliveryImpactWeighted    float64
+	MentoringImpactWeighted   float64
+	EvidenceImpactWeighted    float64
 }
 
 // ContributionScores holds the combined signal contribution (normalized × impact) for each signal.

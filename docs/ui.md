@@ -83,6 +83,13 @@ The Monthly Input Workspace uses a two-column split:
 - Left column (narrow): scrollable member list with status badges (Draft / Done)
 - Right column (wide): the active member's data entry form
 
+Implementation notes (Screen B):
+
+- Each signal field is a single-line numeric Entry. Empty means "not entered" and is persisted as NULL.
+- The right column includes a sticky live preview panel showing TII, completeness percent (progress bar), and a confidence pill.
+- The Save button is disabled until completeness >= 70% (policy captured from domain/completeness thresholds). The team lead may still fill fields before enabling Save.
+- "Copy from previous month" populates the form but does not auto-save.
+
 Active member is highlighted in the list. Switching members replaces the right column only.
 
 ---
@@ -150,6 +157,20 @@ Items are sorted newest-first. No pagination in v1 (24-month history per member 
 - Severity and confidence states must not be communicated by color alone — pill labels carry the text meaning.
 - Minimum contrast for text on colored backgrounds: 4.5:1 (WCAG AA).
 - Fyne's default font size must not be reduced below the framework default.
+
+---
+
+## Navigation Shell Implementation
+
+The sidebar + header shell described above is implemented in `ui/app.go` using `container.NewBorder`:
+
+- **Sidebar:** `container.NewStack` wrapping a `canvas.NewRectangle` background (slate-100) and a `container.NewBorder` that places the app title + separator at the top, Settings button + separator at the bottom, and primary nav buttons in the center.
+- **Header:** `container.NewBorder` with a separator at the bottom and an `HBox` containing the current cycle label (formatted as "Month YYYY").
+- **Content area:** `container.NewStack` whose `Objects` slice is replaced on every nav selection. `content.Refresh()` redraws the area.
+- **Nav buttons:** `widget.Button` with `Alignment: widget.ButtonAlignLeading`. Each button's `OnTapped` closure captures its screen loader and calls `setScreen`.
+- **Screen registry:** `ui/screens.ScreenRegistry` exposes one method per screen. Screens not yet implemented return a centred placeholder label via `screens.PlaceholderScreen(title)`.
+
+**Rationale:** `container.NewBorder` provides the fixed sidebar and fixed header without manual sizing. Replacing `content.Objects` is the idiomatic Fyne pattern for single-content-area navigation; it avoids tabs (which imply peer screens) and matches the sidebar-driven UX described in the layout architecture section.
 
 ---
 
