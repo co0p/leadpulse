@@ -208,3 +208,23 @@ func TestEvaluateBurnoutRisk_amberAtBoundary(t *testing.T) {
 	}
 }
 
+// TestEvaluateBurnoutRisk_noneWhenMoraleAtBoundary60 tests that
+// EvaluateBurnoutRisk returns None when overtime is high but MoraleN is
+// exactly 60 — the Amber rule requires MoraleN strictly below 60.
+// PRD 7.1: Amber requires MoraleN < 60 (strict); exactly 60 does not qualify
+func TestEvaluateBurnoutRisk_noneWhenMoraleAtBoundary60(t *testing.T) {
+	// Arrange: overtime high, morale exactly at boundary (not below it)
+	overtimeHours := 22.0
+	moraleN := 60.0
+	delta1 := 0.0
+	deliveryN := 100.0
+
+	// Act
+	severity := EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateBurnoutRisk(overtime=%v, morale=%v, delta1=%v, delivery=%v) = %v, want %v", overtimeHours, moraleN, delta1, deliveryN, severity, AlertSeverityNone)
+	}
+}
+
