@@ -572,3 +572,34 @@ func TestEvaluateMemberAlerts_returnsAllTriggeredAlerts(t *testing.T) {
 		t.Fatalf("EvaluateMemberAlerts() returned %d alerts, want 2: %+v", len(alerts), alerts)
 	}
 }
+
+// TestEvaluateMemberAlerts_excludesNonTriggeredConditions tests that
+// EvaluateMemberAlerts returns an empty slice when all 6 conditions
+// evaluate to None (healthy member, no alerts).
+func TestEvaluateMemberAlerts_excludesNonTriggeredConditions(t *testing.T) {
+	// Arrange: all inputs healthy, no condition should trigger
+	memberID := TeamMemberID(2)
+	inputs := MemberAlertInputs{
+		MemberID:        memberID,
+		Delta1:          5,
+		Delta3:          10,
+		CurrentMoraleN:  90,
+		PriorMoraleN:    90,
+		HasPriorMonth:   true,
+		OvertimeHours:   5,
+		DeliveryN:       100,
+		CurrentCritical: 0,
+		PriorCritical:   0,
+		CSATN:           100,
+		MarginN:         100,
+		CompletenessPct: 100,
+	}
+
+	// Act
+	alerts := EvaluateMemberAlerts(inputs)
+
+	// Assert
+	if len(alerts) != 0 {
+		t.Errorf("EvaluateMemberAlerts() returned %d alerts, want 0: %+v", len(alerts), alerts)
+	}
+}
