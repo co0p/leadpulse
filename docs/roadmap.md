@@ -73,6 +73,39 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 - **Known limitation:** team-level alert inputs (% members Red, TII stddev history) are accepted as pre-computed parameters; the aggregation pipeline that derives them from real member data is not yet built (deferred to a future increment).
 - **Test command:** `go test -race ./engine/domain -run TestEvaluate` → all pass
 
+## Done
+
+### UI Refactored to Controller Pattern
+- **Job story:** When I add a new screen or fix a form logic bug, I want business logic separated from UI widgets, so that logic is unit testable without Fyne overhead and easier to debug and reuse.
+- **Acceptance criteria met:**
+  - ✅ Controller package created at `ui/controllers/` with base controller interface
+  - ✅ MonthlyInputController extracted; owns form state, data loading, validation, save logic
+  - ✅ SettingsController extracted; owns member list state and member CRUD logic
+  - ✅ Both controllers have zero Fyne imports and are unit testable
+  - ✅ Existing MonthlyInputScreen and SettingsScreen refactored to use controllers
+  - ✅ All existing tests continue to pass (acceptance tests, integration tests, unit tests)
+  - ✅ New controller unit tests added and passing (10 unit tests across both controllers)
+- **Evidence:**
+  - Controller unit tests: 10 tests passing (`ui/controllers/monthly_input_controller_test.go` — 5 tests; `ui/controllers/settings_controller_test.go` — 5 tests)
+  - Screen acceptance tests: 6 tests passing (`ui/screens/monthly_input_acceptance_test.go` — 3 tests including form persistence and reload)
+  - Screen integration test: 1 test passing (`ui/screens/monthly_input_it_test.go` — full form workflow test)
+  - Total test count: 17 passing (10 unit + 6 acceptance + 1 integration)
+  - Build: `go build ./ui/controllers` and `go build ./ui/screens` succeed
+  - Race detector: all tests pass with `-race` flag
+  - Architecture decision: ADR-20260914 documents rationale and implementation pattern
+- **Architecture:**
+  - Controllers live in `ui/controllers/` and import only `service/` and `engine/domain` (zero Fyne)
+  - Dependency direction: UI Screen → Controller → Service Layer (never reversed)
+  - Screens are thin Fyne renderers that delegate state and logic to controllers
+  - Controllers are pure Go functions testable without UI framework setup
+- **Documentation:**
+  - `docs/adr/ADR-20260914-ui-controllers.md` — Decision rationale and pattern
+  - `docs/ui.md` — New "Controller Pattern (Screen Architecture)" section with anatomy, testing, and common patterns
+- **Key commits:** 
+  - Controllers: extraction and unit tests
+  - Screens: refactored to use controllers, all tests remain green
+- **Test command:** `go test -race ./ui/...` → all pass (17/17)
+
 ## In Progress
 
 _Awaiting next increment._

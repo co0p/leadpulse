@@ -163,6 +163,12 @@ The overall monthly score for a team member: `TII = 0.20×DG + 0.35×DP + 0.25×
 **Confidence Score**
 `0.7×CompletenessPct + 0.3×EvidenceN`. Indicates how much trust to place in the computed scores. Badge levels: High (≥80), Medium (60–79), Low (<60).
 
+**Preview Scoring (Unsaved Signals)**
+When the Team Lead is entering data in Screen B, the live preview computes tentative TII and Completeness from the form fields without requiring a save. The `PreviewScores` function accepts a `MonthlyRawSignals` with possible nil fields and handles them according to this rule:
+- **Nil signals default to their neutral normalized value** — the value that represents "no input" or "neutral" on each signal's scale. For most signals (Morale, Billability, CSAT, Net Margin, Positive Feedback, Delivery Reliability, Mentoring Hours, Evidence Notes), this is 0.0 (or the minimum normalized score). For inverse signals (Critical Feedback and Overtime Hours, where higher is worse), the neutral value is also 0.0 because a nil field means "no critical feedback received" and "no overtime hours worked" — not worst-case.
+- **Rationale:** Nil fields represent "not yet entered", not "the Team Lead has decided the answer is zero". Defaulting to neutral prevents the preview from penalizing partially-complete forms and matches the human mental model: "when I don't have data yet, the score is neutral, not bad".
+- **Consequence:** Completeness reflects only filled (non-nil) fields and is independent of the neutral default policy. A form with 5 fields filled and 5 fields empty will show Completeness 50% and a tentative TII computed from the 5 filled signals only.
+
 ---
 
 ## Trend Metrics

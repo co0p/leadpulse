@@ -215,6 +215,117 @@ The Settings screen uses standard Fyne `dialog.ShowForm` patterns for CRUD opera
 
 ---
 
+## Controller Pattern (Screen Architecture)
+
+All Fyne screens use the **MVC controller pattern** to separate business logic from UI rendering. This makes screens testable without Fyne and maintainable long-term.
+
+### Architecture
+
+**Dependency flow (never reversed):**
+```
+Screen → Controller → Service Layer
+Screen ↛ Service Layer (never direct)
+```
+
+**Key rules:**
+1. Each screen has exactly one controller (e.g., `MonthlyInputController`, `SettingsController`)
+2. Controllers live in `ui/controllers/` and have **zero Fyne imports**
+3. Controllers own all form/list state and business logic
+4. Screens are thin renderers that delegate to controllers
+
+### Anatomy of a Screen
+
+**Screen (`ui/screens/monthly_input.go`):**
+- Creates controller instance
+- Loads data via `controller.Load()`
+- Reads form fields → writes to controller → calls `controller.SaveMember()`
+- Renders Fyne widgets; wires callbacks to controller methods
+- All logic is in closures that call controller
+
+**Controller (`ui/controllers/monthly_input_controller.go`):**
+- Owns form state (`MonthlyInputState` struct)
+- Implements core methods: `Load()`, `SelectMember(index)`, `SetFormField()`, `SaveMember()`
+- Calls service layer; never calls Fyne
+- Unit testable in isolation (uses in-memory repos)
+
+### Example Flow: Save Member
+
+1. User types values into form fields (Fyne widgets)
+2. On "Save" click, screen reads all fields and calls `controller.SetFormField(name, value)` for each
+3. Screen calls `controller.SaveMember()`
+4. Controller validates state (if needed) and calls `monthlyService.CreateEntry()` or `monthlyService.UpdateEntry()`
+5. If save succeeds, screen reloads form via `controller.SelectMember()` to display persisted data
+6. Status label shows "Saved"
+
+### Testing Controllers
+
+Controllers are tested via unit tests in `_test.go` files (not acceptance tests). Example:
+
+```go
+func TestMonthlyInputController_SaveMember_Persists(t *testing.T) {
+    memberRepo := domain.NewInMemoryTeamMemberRepository()
+    entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+    // ... populate repos ...
+    
+    memberService := membersvc.NewService(memberRepo, entryRepo)
+    monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
+    
+    controller := controllers.NewMonthlyInputController(memberService, monthlyService)
+    controller.Load()
+    controller.SelectMember(0)
+    
+    morale := 3
+    controller.SetFormField("morale", &morale)
+    err := controller.SaveMember()
+    // assert persisted correctly via monthlyService.GetEntry()
+}
+```
+
+**Key:** No Fyne in the test. Controllers work on pure data structures and services.
+
+### Screens Using Controllers
+
+- **MonthlyInputScreen:** Delegates form/list state to `MonthlyInputController`. Handles all Fyne rendering.
+- **SettingsScreen:** Delegates member CRUD to `SettingsController`. Shows dialogs for add/edit.
+- Future screens should follow the same pattern.
+
+### When to Add a Controller
+
+Add a new controller when:
+- The screen manages stateful interaction (forms, selections, lists)
+- Logic spans multiple methods/closures
+- Testing without Fyne is valuable
+
+Do NOT add a controller for:
+- Read-only displays (charts, tables with no CRUD)
+- Placeholder screens
+
+### Common Patterns
+
+**Form population (loading):**
+```go
+state := controller.GetFormState()
+// Read state.Morale, state.Billability, etc.
+// Populate Fyne Entry widgets
+```
+
+**Form submission:**
+```go
+for _, fieldName := range fieldNames {
+    val, _ := parsePtr(fields[fieldName].Text)
+    controller.SetFormField(fieldName, val)
+}
+err := controller.SaveMember()
+```
+
+**List refresh (after mutation):**
+```go
+err := controller.DeactivateMember(memberID)
+memberList.Refresh()  // Fyne re-renders
+```
+
+---
+
 ## Content Conventions
 
 From the PRD:

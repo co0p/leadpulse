@@ -24,13 +24,15 @@ Four layers. One direction.
 
 ```
 ui/       — Fyne views, widgets, event handlers. No business logic. Replaceable.
+ui/controllers/ — Business logic and state for screens. Zero Fyne imports. Testable.
 service/  — Use cases (transactions). Call store, call engine, return results. Testable without UI.
 store/    — SQLite persistence. Reads/writes domain types. No formula logic.
 engine/   — Pure functions. Scoring, normalization, alerts, trends. No I/O.
 ```
 
 **Rules:**
-- `ui` may import `service` only. No direct `store` or `engine` calls.
+- `ui` may import `ui/controllers` and `service` only. No direct `store` or `engine` calls.
+- `ui/controllers` may import `service` and `engine/domain` only. Zero Fyne imports. Every controller is unit testable.
 - `service` may import `store` and `engine`. Each use case is a transaction: read from `store`, call `engine` if needed, write to `store`, return result.
 - `store` may import `engine` types only (no engine computation).
 - `engine` imports nothing from this project.
@@ -38,6 +40,9 @@ engine/   — Pure functions. Scoring, normalization, alerts, trends. No I/O.
 - SQLite file lives in the OS user data directory (`os.UserConfigDir()`).
 - Single binary distribution — no installer, no runtime dependencies.
 - UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces.
+
+**Controller Pattern (Screen Architecture):**
+Each screen that manages stateful interaction (forms, lists, selections) has a corresponding controller in `ui/controllers/`. Controllers own all form/list state and business logic; Fyne screens are thin renderers that read from and write to the controller. Controllers are pure Go with zero Fyne knowledge and are unit testable in isolation. See `docs/ui.md` for detailed pattern documentation.
 
 **Technology decisions:**
 - Language: Go

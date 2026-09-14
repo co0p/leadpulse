@@ -8,10 +8,17 @@ import (
 	"fyne.io/fyne/v2/widget"
 	domain "leadpulse/engine/domain"
 	"leadpulse/service/member"
+	"leadpulse/ui/controllers"
 )
 
 // NewSettingsScreen creates the Settings screen (Screen F).
 func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
+	// Create controller
+	controller := controllers.NewSettingsController(memberService)
+	if err := controller.Load(); err != nil {
+		return widget.NewLabel("Failed to load team members")
+	}
+
 	// Title bar
 	title := widget.NewRichTextFromMarkdown("# Settings")
 	subtitle := widget.NewLabel("Manage team members")
@@ -20,8 +27,7 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 	var memberList *widget.List
 	memberList = widget.NewList(
 		func() int {
-			members, _ := memberService.ListMembers()
-			return len(members)
+			return controller.GetMemberCount()
 		},
 		func() fyne.CanvasObject {
 			return container.NewHBox(
@@ -34,7 +40,7 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 		},
 		func(id widget.ListItemID, item fyne.CanvasObject) {
 			hbox := item.(*fyne.Container)
-			members, _ := memberService.ListMembers()
+			members := controller.GetMembers()
 			if id >= len(members) {
 				return
 			}
@@ -44,11 +50,11 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 
 			// Wire Edit button
 			hbox.Objects[3].(*widget.Button).OnTapped = func() {
-				showEditDialog(memberService, int64(m.ID()), m.Name().First, m.Name().Last, m.Seniority(), memberList)
+				showEditDialog(controller, memberList, int64(m.ID()), m.Name().First, m.Name().Last, m.Seniority())
 			}
 			// Wire Deactivate button
 			hbox.Objects[4].(*widget.Button).OnTapped = func() {
-				_ = memberService.DeactivateMember(int64(m.ID()))
+				_ = controller.DeactivateMember(int64(m.ID()))
 				memberList.Refresh()
 			}
 		},
@@ -56,7 +62,7 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 
 	// Add Member button
 	addButton := widget.NewButton("+ Add Member", func() {
-		showAddDialog(memberService, memberList)
+		showAddDialog(controller, memberList)
 	})
 
 	// Layout: title block at top, button bar at bottom, list fills middle
@@ -67,7 +73,7 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 }
 
 // showAddDialog opens the Add Member form dialog.
-func showAddDialog(memberService *member.Service, list *widget.List) {
+func showAddDialog(controller *controllers.SettingsController, list *widget.List) {
 	firstNameEntry := widget.NewEntry()
 	firstNameEntry.SetPlaceHolder("First name")
 
@@ -89,7 +95,7 @@ func showAddDialog(memberService *member.Service, list *widget.List) {
 		if !confirmed {
 			return
 		}
-		_, _ = memberService.AddMember(
+		_ = controller.AddMember(
 			firstNameEntry.Text,
 			lastNameEntry.Text,
 			domain.Seniority(senioritySelect.Selected),
@@ -99,7 +105,7 @@ func showAddDialog(memberService *member.Service, list *widget.List) {
 }
 
 // showEditDialog opens the Edit Member form dialog pre-filled with current values.
-func showEditDialog(memberService *member.Service, id int64, firstName, lastName string, seniority domain.Seniority, list *widget.List) {
+func showEditDialog(controller *controllers.SettingsController, list *widget.List, id int64, firstName, lastName string, seniority domain.Seniority) {
 	firstNameEntry := widget.NewEntry()
 	firstNameEntry.SetText(firstName)
 
@@ -121,7 +127,7 @@ func showEditDialog(memberService *member.Service, id int64, firstName, lastName
 		if !confirmed {
 			return
 		}
-		_, _ = memberService.EditMember(
+		_ = controller.EditMember(
 			id,
 			firstNameEntry.Text,
 			lastNameEntry.Text,
