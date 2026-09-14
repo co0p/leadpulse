@@ -110,3 +110,23 @@ func TestEvaluateMoraleRisk_redWhenCurrentBelow35(t *testing.T) {
 	}
 }
 
+// TestEvaluateMoraleRisk_redWhenTwoConsecutiveMonthsBelow50 tests that
+// EvaluateMoraleRisk returns Red when both current and prior month MoraleN
+// are below 50, even though neither alone is severe enough (< 35) to
+// trigger Red via the single-month rule.
+// PRD 7.1: Morale Risk Red: MoraleN < 50 for 2 consecutive months
+func TestEvaluateMoraleRisk_redWhenTwoConsecutiveMonthsBelow50(t *testing.T) {
+	// Arrange: both months moderately low (< 50 but >= 35)
+	currentMoraleN := 45.0
+	priorMoraleN := 40.0
+	hasPriorMonth := true
+
+	// Act
+	severity := EvaluateMoraleRisk(currentMoraleN, priorMoraleN, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateMoraleRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentMoraleN, priorMoraleN, hasPriorMonth, severity, AlertSeverityRed)
+	}
+}
+
