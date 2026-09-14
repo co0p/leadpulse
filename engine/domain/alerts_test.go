@@ -18,3 +18,21 @@ func TestEvaluatePerformanceDeterioration_redAtDelta1Boundary(t *testing.T) {
 		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluatePerformanceDeterioration_redAtDelta3Boundary tests that
+// EvaluatePerformanceDeterioration returns Red when Delta3 is exactly -15,
+// even when Delta1 alone would not trigger Red.
+// PRD 7.1: Performance Deterioration Red: Delta1 <= -10 OR Delta3 <= -15
+func TestEvaluatePerformanceDeterioration_redAtDelta3Boundary(t *testing.T) {
+	// Arrange: Delta1 = 0 (not a factor), Delta3 = -15 (Red boundary)
+	delta1 := 0.0
+	delta3 := -15.0
+
+	// Act
+	severity := EvaluatePerformanceDeterioration(delta1, delta3)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluatePerformanceDeterioration(delta1=%v, delta3=%v) = %v, want %v", delta1, delta3, severity, AlertSeverityRed)
+	}
+}
