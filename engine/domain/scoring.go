@@ -1,5 +1,20 @@
 package domain
 
+// ScoringService encapsulates all impact rating and score computation logic.
+type ScoringService struct{}
+
+// NewScoringService creates a new ScoringService.
+func NewScoringService() *ScoringService {
+	return &ScoringService{}
+}
+
+// ComputeImpactRating converts a signal and its impact rating to a weighted score.
+// The signal value itself is not used in this computation; the impact rating is
+// converted to a 0-100 scale using the layer weights.
+func (s *ScoringService) ComputeImpactRating(signal interface{}, rating ImpactRating) float64 {
+	return rating.ToWeightedScore()
+}
+
 // ScoringResult contains all computed scores for a monthly entry.
 // Produced by the scoring engine and persisted by the store layer.
 type ScoringResult struct {
