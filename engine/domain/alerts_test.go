@@ -662,3 +662,20 @@ func TestEvaluateTeamMoraleDrift_redAt30Percent(t *testing.T) {
 		t.Errorf("EvaluateTeamMoraleDrift(pct=%v) = %v, want %v", pctMembersWithMoraleRed, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateTeamMoraleDrift_noneBelow30Percent tests that
+// EvaluateTeamMoraleDrift returns None when the percentage of members with
+// Morale Red is below 30%.
+// PRD 7.2: no alert when pctMembersWithMoraleRed < 30
+func TestEvaluateTeamMoraleDrift_noneBelow30Percent(t *testing.T) {
+	// Arrange: below the Red threshold
+	pctMembersWithMoraleRed := 29.0
+
+	// Act
+	severity := EvaluateTeamMoraleDrift(pctMembersWithMoraleRed)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateTeamMoraleDrift(pct=%v) = %v, want %v", pctMembersWithMoraleRed, severity, AlertSeverityNone)
+	}
+}
