@@ -767,3 +767,24 @@ func TestEvaluateCalibrationRisk_amberWhenStddevBelow6ForThreeMonths(t *testing.
 		t.Errorf("EvaluateCalibrationRisk(%v) = %v, want %v", stddevHistory, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateCalibrationRisk_noneWhenAnyMonthAtOrAbove6 tests that
+// EvaluateCalibrationRisk returns None when any one of the 3 months has
+// stddev >= 6, even if the other two are below the threshold.
+// PRD 7.2: all 3 months must have stddev < 6; a single failing month
+// breaks the sustained-compression condition.
+func TestEvaluateCalibrationRisk_noneWhenAnyMonthAtOrAbove6(t *testing.T) {
+	// Arrange: 2 low months, 1 month at the boundary (not below it)
+	stddevHistory := []float64{5.0, 6.0, 3.0}
+
+	// Act
+	severity, err := EvaluateCalibrationRisk(stddevHistory)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("EvaluateCalibrationRisk(%v) returned error: %v", stddevHistory, err)
+	}
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateCalibrationRisk(%v) = %v, want %v", stddevHistory, severity, AlertSeverityNone)
+	}
+}
