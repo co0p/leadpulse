@@ -228,3 +228,23 @@ func TestEvaluateBurnoutRisk_noneWhenMoraleAtBoundary60(t *testing.T) {
 	}
 }
 
+// TestEvaluateBurnoutRisk_redViaNegativeDelta1 tests that EvaluateBurnoutRisk
+// returns Red when OvertimeHours >= 25 AND Delta1 < 0, even when
+// DeliveryN is healthy.
+// PRD 7.1: Burnout Risk Red: OvertimeHours >= 25 AND (Delta1 < 0 OR DeliveryN < 60)
+func TestEvaluateBurnoutRisk_redViaNegativeDelta1(t *testing.T) {
+	// Arrange: overtime at Red boundary, negative delta, healthy delivery
+	overtimeHours := 25.0
+	moraleN := 100.0 // healthy; should not prevent Red via delta1 rule
+	delta1 := -1.0
+	deliveryN := 100.0
+
+	// Act
+	severity := EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN)
+
+	// Assert
+	if severity != AlertSeverityRed {
+		t.Errorf("EvaluateBurnoutRisk(overtime=%v, morale=%v, delta1=%v, delivery=%v) = %v, want %v", overtimeHours, moraleN, delta1, deliveryN, severity, AlertSeverityRed)
+	}
+}
+

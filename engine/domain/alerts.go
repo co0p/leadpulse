@@ -46,6 +46,9 @@ func EvaluateMoraleRisk(currentMoraleN, priorMoraleN float64, hasPriorMonth bool
 //   Amber: OvertimeHours >= 20 AND MoraleN < 60
 //   Red: OvertimeHours >= 25 AND (Delta1 < 0 OR DeliveryN < 60)
 func EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN float64) AlertSeverity {
+	if overtimeHours >= 25 && (delta1 < 0 || deliveryN < 60) {
+		return AlertSeverityRed
+	}
 	if overtimeHours >= 20 && moraleN < 60 {
 		return AlertSeverityAmber
 	}
