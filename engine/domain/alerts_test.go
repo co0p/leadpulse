@@ -730,3 +730,20 @@ func TestEvaluateSystemicBurnout_redAt25Percent(t *testing.T) {
 		t.Errorf("EvaluateSystemicBurnout(pct=%v) = %v, want %v", pctMembersWithBurnoutRed, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateSystemicBurnout_noneBelow25Percent tests that
+// EvaluateSystemicBurnout returns None when the percentage of members with
+// Burnout Red is below 25%.
+// PRD 7.2: no alert when pctMembersWithBurnoutRed < 25
+func TestEvaluateSystemicBurnout_noneBelow25Percent(t *testing.T) {
+	// Arrange: below the Red threshold
+	pctMembersWithBurnoutRed := 24.0
+
+	// Act
+	severity := EvaluateSystemicBurnout(pctMembersWithBurnoutRed)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateSystemicBurnout(pct=%v) = %v, want %v", pctMembersWithBurnoutRed, severity, AlertSeverityNone)
+	}
+}
