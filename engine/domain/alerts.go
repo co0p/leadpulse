@@ -73,3 +73,15 @@ func EvaluateFeedbackRisk(currentCritical, priorCritical int, hasPriorMonth bool
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateCustomerBusinessRisk evaluates the Customer/Business Risk alert
+// condition for a member's CSAT and net margin normalized scores.
+// PRD 7.1:
+//   Amber: CSATN < 60 OR MarginN < 45
+//   Red: CSATN < 50 AND MarginN < 40
+func EvaluateCustomerBusinessRisk(csatN, marginN float64) AlertSeverity {
+	if csatN < 60 {
+		return AlertSeverityAmber
+	}
+	return AlertSeverityNone
+}

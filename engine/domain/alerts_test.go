@@ -384,3 +384,21 @@ func TestEvaluateFeedbackRisk_noneWhenBelowThree(t *testing.T) {
 		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateCustomerBusinessRisk_amberAtCSATBoundary tests that
+// EvaluateCustomerBusinessRisk returns Amber when CSATN is exactly 59
+// (below 60) and MarginN is healthy.
+// PRD 7.1: Customer/Business Risk Amber: CSATN < 60 OR MarginN < 45
+func TestEvaluateCustomerBusinessRisk_amberAtCSATBoundary(t *testing.T) {
+	// Arrange: CSAT just below Amber threshold, margin healthy
+	csatN := 59.0
+	marginN := 100.0
+
+	// Act
+	severity := EvaluateCustomerBusinessRisk(csatN, marginN)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityAmber)
+	}
+}
