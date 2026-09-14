@@ -788,3 +788,20 @@ func TestEvaluateCalibrationRisk_noneWhenAnyMonthAtOrAbove6(t *testing.T) {
 		t.Errorf("EvaluateCalibrationRisk(%v) = %v, want %v", stddevHistory, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateCalibrationRisk_errorWithFewerThanThreeMonths tests that
+// EvaluateCalibrationRisk returns an error when fewer than 3 months of
+// stddev history are provided.
+// PRD 7.2: Calibration Risk requires 3 months of history to evaluate.
+func TestEvaluateCalibrationRisk_errorWithFewerThanThreeMonths(t *testing.T) {
+	// Arrange: only 2 months of history
+	stddevHistory := []float64{5.0, 4.0}
+
+	// Act
+	_, err := EvaluateCalibrationRisk(stddevHistory)
+
+	// Assert
+	if err == nil {
+		t.Error("EvaluateCalibrationRisk() with 2 months should return an error")
+	}
+}
