@@ -105,20 +105,25 @@ type MonthlyEntryID struct {
 }
 
 // MonthlyRawSignals is a sub-aggregate containing all raw input signals for a month.
+// Pointer fields allow us to distinguish a value of zero from an unset field.
 type MonthlyRawSignals struct {
-	Morale               int // 0–5
-	Billability          int // 0–100
-	CSAT                 int // 1–5
-	NetMargin            int // -20 to +60
-	PositiveFeedback     int // >= 0
-	CriticalFeedback     int // >= 0
-	OvertimeHours        int // >= 0
-	DeliveryReliability  int // 0–100
-	MentoringHours       int // >= 0
-	EvidenceNotesCount   int // >= 0
+	Morale               *int // 0–5
+	Billability          *int // 0–100
+	CSAT                 *int // 1–5
+	NetMargin            *int // -20 to +60
+	PositiveFeedback     *int // >= 0
+	CriticalFeedback     *int // >= 0
+	OvertimeHours        *int // >= 0
+	DeliveryReliability  *int // 0–100
+	MentoringHours       *int // >= 0
+	EvidenceNotesCount   *int // >= 0
 }
 
-// NewMonthlyRawSignals validates and creates a raw signals sub-aggregate.
+func intPtr(v int) *int {
+	return &v
+}
+
+// NewMonthlyRawSignals validates and creates a raw signals sub-aggregate from concrete values.
 // All signal values are validated against their type constraints.
 func NewMonthlyRawSignals(
 	morale, billability, csat, netMargin, positiveFeedback, criticalFeedback,
@@ -157,6 +162,70 @@ func NewMonthlyRawSignals(
 	}
 
 	return MonthlyRawSignals{
+		Morale:              intPtr(morale),
+		Billability:         intPtr(billability),
+		CSAT:                intPtr(csat),
+		NetMargin:           intPtr(netMargin),
+		PositiveFeedback:    intPtr(positiveFeedback),
+		CriticalFeedback:    intPtr(criticalFeedback),
+		OvertimeHours:       intPtr(overtimeHours),
+		DeliveryReliability: intPtr(deliveryReliability),
+		MentoringHours:      intPtr(mentoringHours),
+		EvidenceNotesCount:  intPtr(evidenceNotesCount),
+	}, nil
+}
+
+// NewMonthlyRawSignalsFromPointers validates and creates a raw signals sub-aggregate,
+// allowing unset values to be represented as nil.
+func NewMonthlyRawSignalsFromPointers(
+	morale, billability, csat, netMargin, positiveFeedback, criticalFeedback,
+	overtimeHours, deliveryReliability, mentoringHours, evidenceNotesCount *int,
+) (MonthlyRawSignals, error) {
+	validate := func(name string, value *int, min, max int, allowZero bool) error {
+		if value == nil {
+			return nil
+		}
+		if *value < min || *value > max {
+			return fmt.Errorf("%s must be %d–%d, got %d", name, min, max, *value)
+		}
+		if !allowZero && *value == 0 {
+			return fmt.Errorf("%s must be > 0, got %d", name, *value)
+		}
+		return nil
+	}
+
+	if err := validate("morale", morale, 0, 5, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("billability", billability, 0, 100, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("CSAT", csat, 1, 5, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("net margin", netMargin, -20, 60, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("positive feedback", positiveFeedback, 0, 1000000, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("critical feedback", criticalFeedback, 0, 1000000, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("overtime hours", overtimeHours, 0, 1000000, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("delivery reliability", deliveryReliability, 0, 100, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("mentoring hours", mentoringHours, 0, 1000000, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+	if err := validate("evidence notes count", evidenceNotesCount, 0, 1000000, true); err != nil {
+		return MonthlyRawSignals{}, err
+	}
+
+	return MonthlyRawSignals{
 		Morale:              morale,
 		Billability:         billability,
 		CSAT:                csat,
@@ -170,36 +239,37 @@ func NewMonthlyRawSignals(
 	}, nil
 }
 
-// FilledSignalCount returns how many non-zero signals are present.
+// FilledSignalCount returns how many signals are explicitly set.
 func (mrs MonthlyRawSignals) FilledSignalCount() int {
 	count := 0
-	if mrs.Morale > 0 {
+	if mrs.Morale != nil {
 		count++
 	}
-	if mrs.Billability > 0 {
+	if mrs.Billability != nil {
 		count++
 	}
-	if mrs.CSAT > 0 {
+	if mrs.CSAT != nil {
 		count++
 	}
-	// NetMargin: only count if explicitly set (non-zero or negative)
-	// For this prototype, 0 is default/unset, so we don't count it
-	if mrs.PositiveFeedback > 0 {
+	if mrs.NetMargin != nil {
 		count++
 	}
-	if mrs.CriticalFeedback > 0 {
+	if mrs.PositiveFeedback != nil {
 		count++
 	}
-	if mrs.OvertimeHours > 0 {
+	if mrs.CriticalFeedback != nil {
 		count++
 	}
-	if mrs.DeliveryReliability > 0 {
+	if mrs.OvertimeHours != nil {
 		count++
 	}
-	if mrs.MentoringHours > 0 {
+	if mrs.DeliveryReliability != nil {
 		count++
 	}
-	if mrs.EvidenceNotesCount > 0 {
+	if mrs.MentoringHours != nil {
+		count++
+	}
+	if mrs.EvidenceNotesCount != nil {
 		count++
 	}
 	return count

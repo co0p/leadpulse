@@ -47,8 +47,8 @@ func TestCreateMonthlyEntryForActiveMember(t *testing.T) {
 		t.Errorf("entry ID mismatch")
 	}
 
-	if entry.Signals().Morale != 3 {
-		t.Errorf("expected morale 3, got %d", entry.Signals().Morale)
+	if entry.Signals().Morale == nil || *entry.Signals().Morale != 3 {
+		t.Errorf("expected morale 3, got %v", entry.Signals().Morale)
 	}
 }
 
@@ -78,6 +78,31 @@ func TestCreateMonthlyEntryForInactiveMemberFails(t *testing.T) {
 	}
 
 	if err.Error() != "failed to create entry: cannot create entry for deactivated member" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestCreateMonthlyEntryRejectsInvalidInput tests that out-of-range signal values are rejected.
+func TestCreateMonthlyEntryRejectsInvalidInput(t *testing.T) {
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	name, _ := domain.NewFullName("Charlie", "Davis")
+	member, _ := domain.NewTeamMember(1, name, domain.SeniorityJunior)
+	memberRepo.Save(member)
+
+	svc := NewService(memberRepo, entryRepo)
+
+	_, err := svc.CreateEntry(
+		1, "2024-10",
+		6, 85, 4, 15, 5, 1, 4, 90, 2, 8,
+	)
+
+	if err == nil {
+		t.Fatal("expected error for invalid morale, got none")
+	}
+
+	if err.Error() != "invalid signals: morale must be 0–5, got 6" {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
@@ -154,8 +179,8 @@ func TestGetMonthlyEntry(t *testing.T) {
 		t.Errorf("month mismatch")
 	}
 
-	if retrieved.Signals().Morale != 4 {
-		t.Errorf("expected morale 4, got %d", retrieved.Signals().Morale)
+	if retrieved.Signals().Morale == nil || *retrieved.Signals().Morale != 4 {
+		t.Errorf("expected morale 4, got %v", retrieved.Signals().Morale)
 	}
 }
 
@@ -215,12 +240,12 @@ func TestUpdateEntry(t *testing.T) {
 		t.Fatalf("UpdateEntry failed: %v", err)
 	}
 
-	if updated.Signals().Morale != 5 {
-		t.Errorf("expected morale 5, got %d", updated.Signals().Morale)
+	if updated.Signals().Morale == nil || *updated.Signals().Morale != 5 {
+		t.Errorf("expected morale 5, got %v", updated.Signals().Morale)
 	}
 
-	if updated.Signals().Billability != 95 {
-		t.Errorf("expected billability 95, got %d", updated.Signals().Billability)
+	if updated.Signals().Billability == nil || *updated.Signals().Billability != 95 {
+		t.Errorf("expected billability 95, got %v", updated.Signals().Billability)
 	}
 }
 

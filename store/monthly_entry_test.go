@@ -88,8 +88,8 @@ func TestMonthlyEntryRepositoryFindByID(t *testing.T) {
 		t.Errorf("ID mismatch")
 	}
 
-	if retrieved.Signals().Morale != 4 {
-		t.Errorf("morale mismatch: expected 4, got %d", retrieved.Signals().Morale)
+	if retrieved.Signals().Morale == nil || *retrieved.Signals().Morale != 4 {
+		t.Errorf("morale mismatch: expected 4, got %v", retrieved.Signals().Morale)
 	}
 }
 

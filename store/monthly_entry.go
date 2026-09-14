@@ -21,6 +21,13 @@ func NewSQLiteMonthlyEntryRepository(db *sql.DB) *SQLiteMonthlyEntryRepository {
 }
 
 // Save persists a monthly entry aggregate to the database.
+func valueOrZero(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 	if entry == nil {
 		return fmt.Errorf("cannot save nil monthly entry")
@@ -68,16 +75,16 @@ func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 		`,
 			int64(id.MemberID),
 			id.Month,
-			signals.Morale,
-			signals.Billability,
-			signals.CSAT,
-			signals.NetMargin,
-			signals.PositiveFeedback,
-			signals.CriticalFeedback,
-			signals.OvertimeHours,
-			signals.DeliveryReliability,
-			signals.MentoringHours,
-			signals.EvidenceNotesCount,
+			valueOrZero(signals.Morale),
+			valueOrZero(signals.Billability),
+			valueOrZero(signals.CSAT),
+			valueOrZero(signals.NetMargin),
+			valueOrZero(signals.PositiveFeedback),
+			valueOrZero(signals.CriticalFeedback),
+			valueOrZero(signals.OvertimeHours),
+			valueOrZero(signals.DeliveryReliability),
+			valueOrZero(signals.MentoringHours),
+			valueOrZero(signals.EvidenceNotesCount),
 			computedScoresJSON,
 			entry.CreatedAt().UTC().Format(time.RFC3339),
 			computedAtStr,
@@ -96,16 +103,16 @@ func (r *SQLiteMonthlyEntryRepository) Save(entry *domain.MonthlyEntry) error {
 				computed_scores = ?, computed_at = ?
 			WHERE member_id = ? AND month = ?
 		`,
-			signals.Morale,
-			signals.Billability,
-			signals.CSAT,
-			signals.NetMargin,
-			signals.PositiveFeedback,
-			signals.CriticalFeedback,
-			signals.OvertimeHours,
-			signals.DeliveryReliability,
-			signals.MentoringHours,
-			signals.EvidenceNotesCount,
+			valueOrZero(signals.Morale),
+			valueOrZero(signals.Billability),
+			valueOrZero(signals.CSAT),
+			valueOrZero(signals.NetMargin),
+			valueOrZero(signals.PositiveFeedback),
+			valueOrZero(signals.CriticalFeedback),
+			valueOrZero(signals.OvertimeHours),
+			valueOrZero(signals.DeliveryReliability),
+			valueOrZero(signals.MentoringHours),
+			valueOrZero(signals.EvidenceNotesCount),
 			computedScoresJSON,
 			computedAtStr,
 			int64(id.MemberID),
