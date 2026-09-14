@@ -366,3 +366,21 @@ func TestEvaluateFeedbackRisk_amberWhenNoPriorMonthData(t *testing.T) {
 		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateFeedbackRisk_noneWhenBelowThree tests that EvaluateFeedbackRisk
+// returns None when CriticalFeedbackCount is below 3.
+// PRD 7.1: no alert when CriticalFeedbackCount < 3
+func TestEvaluateFeedbackRisk_noneWhenBelowThree(t *testing.T) {
+	// Arrange: healthy feedback count
+	currentCritical := 1
+	priorCritical := 2
+	hasPriorMonth := true
+
+	// Act
+	severity := EvaluateFeedbackRisk(currentCritical, priorCritical, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityNone)
+	}
+}
