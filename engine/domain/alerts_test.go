@@ -347,3 +347,22 @@ func TestEvaluateFeedbackRisk_amberNotRedWhenImproving(t *testing.T) {
 		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateFeedbackRisk_amberWhenNoPriorMonthData tests that
+// EvaluateFeedbackRisk returns Amber (not Red) when CriticalFeedbackCount
+// is >= 4 but there is no prior month data to confirm a worsening trend.
+// This is a deliberate conservative default: Red requires 2-month history.
+func TestEvaluateFeedbackRisk_amberWhenNoPriorMonthData(t *testing.T) {
+	// Arrange: current month severe, but no prior month data exists
+	currentCritical := 5
+	priorCritical := 0
+	hasPriorMonth := false
+
+	// Act
+	severity := EvaluateFeedbackRisk(currentCritical, priorCritical, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
+	}
+}
