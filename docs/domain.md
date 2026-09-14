@@ -21,6 +21,43 @@ A collection-like abstraction that persists and retrieves aggregates from storag
 **Domain Service**
 A stateless service that enforces business rules spanning multiple aggregates. Domain services operate on aggregates and repositories, but the logic belongs to the domain, not to the application layer. Example: `MonthlyEntryService` enforces that only active members can have entries and that one entry per member per month is allowed.
 
+### Domain Service Implementation Pattern
+
+Every domain service follows a consistent structure for consistency and testability:
+
+```go
+// Struct: holds repository dependencies only (no application state)
+type DomainService struct {
+    memberRepo domain.TeamMemberRepository
+    entryRepo  domain.MonthlyEntryRepository
+}
+
+// Constructor: factory function for initialization
+func NewDomainService(memberRepo, entryRepo) *DomainService {
+    return &DomainService{
+        memberRepo: memberRepo,
+        entryRepo:  entryRepo,
+    }
+}
+
+// Methods: public methods enforce business rules and delegate to repositories
+func (s *DomainService) BusinessRule(aggregate *Aggregate) error {
+    // Validate cross-aggregate invariants
+    // Call repository methods
+    // Return error if rule violated
+}
+```
+
+**Rules:**
+- Domain services accept repository *interfaces*, not concrete storage (`*sql.DB`, store types).
+- All methods are testable with in-memory repository implementations.
+- No circular dependencies between domain services.
+- Error handling preserves error chains using `fmt.Errorf("%w", err)`.
+
+**Testing:** Domain service tests create in-memory repositories, inject them into the service constructor, and verify rule enforcement without database access.
+
+**Examples:** `ScoringService` (computes impact ratings), `TrendService` (calculates moving averages), `ValidationService` (enforces uniqueness and consistency).
+
 ---
 
 ## Core Concepts

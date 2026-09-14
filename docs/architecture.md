@@ -70,16 +70,20 @@ No external network connections. No cloud. No server.
 - **Technology:** Go (pure functions, no I/O)
 - **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/monthly/`). Each use case is a transaction: fetch aggregates via repository, call domain services for cross-aggregate rules, call `engine/` for computation, persist via repository, return the result or error.
 - **Dependency model:** All persistence is abstracted via repository interfaces defined in `engine/domain/`. Service layer receives these interfaces as dependencies (not `*sql.DB`). This enables testing with in-memory repositories (no database required).
+- **Domain services:** Application services depend on domain services (`ScoringService`, `TrendService`, `ValidationService`, `MonthlyEntryService`) which enforce cross-aggregate rules before persistence. Domain services also accept repository interfaces only; no database coupling.
+- **Service aggregation:** `ApplicationServices` struct aggregates all service interfaces (`MemberService`, `MonthlyService`) for injection into the UI layer. The UI depends on this struct, not on individual services or repositories.
 - **Constraints:** No UI logic. No direct SQLite access. No direct database dependencies. Delegates persistence to repository interfaces, computation to `engine/`, cross-aggregate rule enforcement to domain services.
-- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember), `service/monthly/` (CreateEntry, GetEntry, ListEntriesByMember, UpdateEntry).
+- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember), `service/monthly/` (CreateEntry, GetEntry, ListEntriesByMember, UpdateEntry, ComputeScores, GetTrends).
 - **Planned use cases:** SubmitMonthlyEntry (wrapper around monthly service), GenerateAlerts, ExportTeamOverview.
 
 ### `ui/` — Desktop Interface (Replaceable)
 - **Technology:** Go, Fyne v2 (`fyne.io/fyne/v2`)
 - **Responsibility:** Render all screens (Overview Dashboard, Monthly Input Workspace, Member Detail, Alerts Center, Monthly Review, Settings). Handle user interaction. Delegate all business logic to `service/`.
+- **Service dependency:** UI accepts `ApplicationServices` struct containing all service interfaces (`MemberService`, `MonthlyService`). This decouples the UI from persistence concerns; the UI never sees repositories or database connections.
 - **Screens:** A (Overview), B (Monthly Input), C (Member Detail), D (Alerts Center), E (Monthly Review), F (Settings)
-- **Implemented screens:** F (Settings) — team member list, add/edit/deactivate dialogs, calls `service/member/`
-- **Constraints:** No business logic. No direct SQLite access. Calls `service/` for all use cases. Testable by swapping `service/` implementation. Can be replaced with a CLI, web UI, or any other presentation layer that calls the same `service/` interfaces.
+- **Implemented screens:** F (Settings) — team member list, add/edit/deactivate dialogs, calls `service.MemberService`
+- **Initialization:** main.go creates repositories → creates services → aggregates services into ApplicationServices → passes to UI. This preserves the separation: UI depends on services only.
+- **Constraints:** No business logic. No direct SQLite access. No repository access. No database connections. Calls `service/` for all use cases. Testable by swapping `service/` implementation. Can be replaced with a CLI, web UI, or any other presentation layer that calls the same `service/` interfaces.
 - **Future alternative:** A CLI client (`cmd/cli/`) can implement the same `service/` interfaces for headless or scripted workflows.
 
 ### `store/` — Persistence Layer
@@ -105,15 +109,20 @@ No external network connections. No cloud. No server.
 ## Dependency Direction
 
 ```
-ui  →  service  →  store  →  engine  (types only)
-            ↓
-         engine
+ui  →  ApplicationServices  →  service  →  engine/domain (services + interfaces)
+                                    ↓
+                              repository interfaces
+                                    ↓
+                                 store  
+                                    ↓
+                          engine/domain (types only)
 ```
 
-- `engine` has no project-internal dependencies.
-- `store` may use engine types for its function signatures but must not call engine computation functions.
-- `service` calls both `store` and `engine`. Each use case is a transaction: read from `store`, call `engine` if needed, write to `store`, return result.
-- `ui` calls `service` only. No direct `store` or `engine` calls. This makes `ui` replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces.
+- `engine/domain` has no project-internal dependencies. Contains value objects, aggregates, domain services, and repository interfaces.
+- `store` implements repository interfaces defined in `engine/domain`. May use engine types but must not call engine computation functions.
+- `service` depends on repository interfaces (not concrete store implementations). Each use case is a transaction: read from repository, call domain services for cross-aggregate rules, call `engine/` if needed, write to repository, return result.
+- `ApplicationServices` aggregates all service instances for presentation-layer injection.
+- `ui` calls `service` via `ApplicationServices` only. No direct `store`, `repository`, or `engine` calls. This makes `ui` replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces by receiving `ApplicationServices`.
 
 ---
 

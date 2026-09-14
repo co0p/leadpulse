@@ -23,10 +23,16 @@ The system has four layers with different risk profiles:
 - A trend calculation is introduced (MA3, Delta1, Delta3, Vol3, dimension deltas).
 - A business rule is encoded (e.g., guardrail logic).
 
+**Domain service unit tests (engine/domain/):** Write when:
+- A new domain service is implemented (e.g., `ValidationService`, `ScoringService`).
+- A domain service method enforces a new business rule or cross-aggregate constraint.
+- A domain service's rule logic changes.
+
 **Service unit tests:** Write when:
 - A new use case is implemented (e.g., `AddMember`, `SubmitMonthlyEntry`, `GenerateAlerts`).
 - A use case's logic changes (order of operations, new calls to `store` or `engine`, new validations).
 - A use case's error handling is added or changed.
+- A use case's integration with domain services changes.
 
 **Store integration tests:** Write when:
 - A new store function is added (read, write, update, delete).
@@ -61,6 +67,31 @@ The system has four layers with different risk profiles:
 - Each test: create an in-memory repository, inject it into the service, set up fixtures via repository, call the use case, verify repository state and return values.
 - Verify error cases: invalid input, repository errors, domain service rule violations (e.g., inactive member, duplicate entry), engine validation failures.
 - Example: for CreateMonthlyEntry, test that calling with an inactive member fails before calling repository.Save().
+
+**Domain service tests (engine/domain/):**
+- Live in `engine/domain/<service>_test.go`, alongside the domain service implementation.
+- Function names: `Test<ServiceName>_<scenario>`. Example: `TestValidationService_rejectsDuplicate`, `TestScoringService_validatesRange`.
+- Use in-memory repository implementations exclusively (InMemoryTeamMemberRepository, InMemoryMonthlyEntryRepository) — no database or store package imports.
+- Each test: create in-memory repositories, inject into domain service constructor, set up test data via repository, call domain service methods, verify rule enforcement without database access.
+- Verify business rule enforcement: uniqueness constraints, cross-aggregate invariants, state consistency, value range validation.
+- Domain services never require database access during testing. If a domain service test needs a database, the test design is wrong; refactor the dependency injection.
+- **Canonical pattern:**
+  ```go
+  // Create in-memory repositories
+  memberRepo := domain.NewInMemoryTeamMemberRepository()
+  entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+  
+  // Create domain service with repository dependencies
+  service := domain.NewValidationService(memberRepo, entryRepo)
+  
+  // Set up test fixtures via repository (no SQL)
+  member, _ := domain.NewTeamMember(1, name, seniority)
+  memberRepo.Save(member)
+  
+  // Call domain service and verify rule enforcement
+  err := service.ValidateTeamMemberUniqueness(member)
+  // Assert error as expected
+  ```
 
 **Store integration tests:**
 - Live in `store/<file>_test.go`, alongside the function under test.
