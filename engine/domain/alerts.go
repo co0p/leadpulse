@@ -9,6 +9,56 @@ const (
 	AlertSeverityRed
 )
 
+// AlertType identifies which alert condition triggered an Alert.
+type AlertType int
+
+const (
+	AlertTypePerformanceDeterioration AlertType = iota
+	AlertTypeMoraleRisk
+	AlertTypeBurnoutRisk
+	AlertTypeFeedbackRisk
+	AlertTypeCustomerBusinessRisk
+	AlertTypeDataQualityRisk
+)
+
+// Alert represents a single triggered alert for a member, carrying enough
+// detail to be understood without re-deriving it from raw scores.
+type Alert struct {
+	Type     AlertType
+	Severity AlertSeverity
+	MemberID TeamMemberID
+}
+
+// MemberAlertInputs bundles all the pre-computed values EvaluateMemberAlerts
+// needs to evaluate all 6 individual alert conditions for one member.
+type MemberAlertInputs struct {
+	MemberID TeamMemberID
+
+	// Performance Deterioration
+	Delta1 float64
+	Delta3 float64
+
+	// Morale Risk
+	CurrentMoraleN float64
+	PriorMoraleN   float64
+	HasPriorMonth  bool
+
+	// Burnout Risk
+	OvertimeHours float64
+	DeliveryN     float64
+
+	// Feedback Risk
+	CurrentCritical int
+	PriorCritical   int
+
+	// Customer/Business Risk
+	CSATN   float64
+	MarginN float64
+
+	// Data Quality Risk
+	CompletenessPct float64
+}
+
 // EvaluatePerformanceDeterioration evaluates the Performance Deterioration
 // alert condition for a single member's Delta1 and Delta3 trend values.
 // PRD 7.1: Red: Delta1 <= -10 OR Delta3 <= -15
@@ -102,4 +152,32 @@ func EvaluateDataQualityRisk(completenessPct float64) AlertSeverity {
 		return AlertSeverityAmber
 	}
 	return AlertSeverityNone
+}
+
+// EvaluateMemberAlerts evaluates all 6 individual alert conditions for one
+// member and returns an Alert for each condition that triggers (Amber or
+// Red). Conditions that evaluate to None are excluded from the result.
+func EvaluateMemberAlerts(inputs MemberAlertInputs) []Alert {
+	var alerts []Alert
+
+	if severity := EvaluatePerformanceDeterioration(inputs.Delta1, inputs.Delta3); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypePerformanceDeterioration, Severity: severity, MemberID: inputs.MemberID})
+	}
+	if severity := EvaluateMoraleRisk(inputs.CurrentMoraleN, inputs.PriorMoraleN, inputs.HasPriorMonth); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypeMoraleRisk, Severity: severity, MemberID: inputs.MemberID})
+	}
+	if severity := EvaluateBurnoutRisk(inputs.OvertimeHours, inputs.CurrentMoraleN, inputs.Delta1, inputs.DeliveryN); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypeBurnoutRisk, Severity: severity, MemberID: inputs.MemberID})
+	}
+	if severity := EvaluateFeedbackRisk(inputs.CurrentCritical, inputs.PriorCritical, inputs.HasPriorMonth); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypeFeedbackRisk, Severity: severity, MemberID: inputs.MemberID})
+	}
+	if severity := EvaluateCustomerBusinessRisk(inputs.CSATN, inputs.MarginN); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypeCustomerBusinessRisk, Severity: severity, MemberID: inputs.MemberID})
+	}
+	if severity := EvaluateDataQualityRisk(inputs.CompletenessPct); severity != AlertSeverityNone {
+		alerts = append(alerts, Alert{Type: AlertTypeDataQualityRisk, Severity: severity, MemberID: inputs.MemberID})
+	}
+
+	return alerts
 }

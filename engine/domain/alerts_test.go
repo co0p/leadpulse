@@ -540,3 +540,35 @@ func TestEvaluateDataQualityRisk_noneAtExactly85(t *testing.T) {
 		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateMemberAlerts_returnsAllTriggeredAlerts tests that
+// EvaluateMemberAlerts aggregates all 6 individual alert evaluators and
+// returns an Alert for each condition that triggers (Amber or Red).
+func TestEvaluateMemberAlerts_returnsAllTriggeredAlerts(t *testing.T) {
+	// Arrange: inputs that trigger both Performance Deterioration (Red)
+	// and Data Quality Risk (Amber), with all other conditions healthy
+	memberID := TeamMemberID(1)
+	inputs := MemberAlertInputs{
+		MemberID:         memberID,
+		Delta1:           -10, // triggers Performance Deterioration Red
+		Delta3:           0,
+		CurrentMoraleN:   100,
+		PriorMoraleN:     0,
+		HasPriorMonth:    false,
+		OvertimeHours:    0,
+		DeliveryN:        100,
+		CurrentCritical:  0,
+		PriorCritical:    0,
+		CSATN:            100,
+		MarginN:          100,
+		CompletenessPct:  80, // triggers Data Quality Risk Amber
+	}
+
+	// Act
+	alerts := EvaluateMemberAlerts(inputs)
+
+	// Assert: exactly 2 alerts triggered
+	if len(alerts) != 2 {
+		t.Fatalf("EvaluateMemberAlerts() returned %d alerts, want 2: %+v", len(alerts), alerts)
+	}
+}
