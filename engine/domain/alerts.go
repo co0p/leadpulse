@@ -158,26 +158,23 @@ func EvaluateDataQualityRisk(completenessPct float64) AlertSeverity {
 // member and returns an Alert for each condition that triggers (Amber or
 // Red). Conditions that evaluate to None are excluded from the result.
 func EvaluateMemberAlerts(inputs MemberAlertInputs) []Alert {
+	conditions := []struct {
+		alertType AlertType
+		severity  AlertSeverity
+	}{
+		{AlertTypePerformanceDeterioration, EvaluatePerformanceDeterioration(inputs.Delta1, inputs.Delta3)},
+		{AlertTypeMoraleRisk, EvaluateMoraleRisk(inputs.CurrentMoraleN, inputs.PriorMoraleN, inputs.HasPriorMonth)},
+		{AlertTypeBurnoutRisk, EvaluateBurnoutRisk(inputs.OvertimeHours, inputs.CurrentMoraleN, inputs.Delta1, inputs.DeliveryN)},
+		{AlertTypeFeedbackRisk, EvaluateFeedbackRisk(inputs.CurrentCritical, inputs.PriorCritical, inputs.HasPriorMonth)},
+		{AlertTypeCustomerBusinessRisk, EvaluateCustomerBusinessRisk(inputs.CSATN, inputs.MarginN)},
+		{AlertTypeDataQualityRisk, EvaluateDataQualityRisk(inputs.CompletenessPct)},
+	}
+
 	var alerts []Alert
-
-	if severity := EvaluatePerformanceDeterioration(inputs.Delta1, inputs.Delta3); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypePerformanceDeterioration, Severity: severity, MemberID: inputs.MemberID})
+	for _, c := range conditions {
+		if c.severity != AlertSeverityNone {
+			alerts = append(alerts, Alert{Type: c.alertType, Severity: c.severity, MemberID: inputs.MemberID})
+		}
 	}
-	if severity := EvaluateMoraleRisk(inputs.CurrentMoraleN, inputs.PriorMoraleN, inputs.HasPriorMonth); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypeMoraleRisk, Severity: severity, MemberID: inputs.MemberID})
-	}
-	if severity := EvaluateBurnoutRisk(inputs.OvertimeHours, inputs.CurrentMoraleN, inputs.Delta1, inputs.DeliveryN); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypeBurnoutRisk, Severity: severity, MemberID: inputs.MemberID})
-	}
-	if severity := EvaluateFeedbackRisk(inputs.CurrentCritical, inputs.PriorCritical, inputs.HasPriorMonth); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypeFeedbackRisk, Severity: severity, MemberID: inputs.MemberID})
-	}
-	if severity := EvaluateCustomerBusinessRisk(inputs.CSATN, inputs.MarginN); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypeCustomerBusinessRisk, Severity: severity, MemberID: inputs.MemberID})
-	}
-	if severity := EvaluateDataQualityRisk(inputs.CompletenessPct); severity != AlertSeverityNone {
-		alerts = append(alerts, Alert{Type: AlertTypeDataQualityRisk, Severity: severity, MemberID: inputs.MemberID})
-	}
-
 	return alerts
 }
