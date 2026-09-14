@@ -288,3 +288,21 @@ func TestEvaluateBurnoutRisk_noneWhenOvertimeLow(t *testing.T) {
 	}
 }
 
+
+// TestEvaluateFeedbackRisk_amberAtThreeCritical tests that
+// EvaluateFeedbackRisk returns Amber when CriticalFeedbackCount is exactly 3.
+// PRD 7.1: Feedback Risk Amber: CriticalFeedbackCount >= 3
+func TestEvaluateFeedbackRisk_amberAtThreeCritical(t *testing.T) {
+	// Arrange: exactly 3 critical feedback items, no prior month data
+	currentCritical := 3
+	priorCritical := 0
+	hasPriorMonth := false
+
+	// Act
+	severity := EvaluateFeedbackRisk(currentCritical, priorCritical, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateFeedbackRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentCritical, priorCritical, hasPriorMonth, severity, AlertSeverityAmber)
+	}
+}

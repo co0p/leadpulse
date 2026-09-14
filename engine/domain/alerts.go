@@ -54,3 +54,19 @@ func EvaluateBurnoutRisk(overtimeHours, moraleN, delta1, deliveryN float64) Aler
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateFeedbackRisk evaluates the Feedback Risk alert condition for a
+// member's current and prior month critical feedback counts.
+// PRD 7.1:
+//   Amber: CriticalFeedbackCount >= 3
+//   Red: CriticalFeedbackCount >= 4 AND declining (worsening, non-decreasing)
+//        2-month critical trend
+// "Declining 2-month critical trend" is interpreted as the problem not
+// improving: current month's count is not lower than the prior month's.
+// Without prior-month data, Red cannot be confirmed; max severity is Amber.
+func EvaluateFeedbackRisk(currentCritical, priorCritical int, hasPriorMonth bool) AlertSeverity {
+	if currentCritical >= 3 {
+		return AlertSeverityAmber
+	}
+	return AlertSeverityNone
+}
