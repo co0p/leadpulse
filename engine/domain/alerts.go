@@ -198,3 +198,13 @@ func EvaluateTeamDeliveryDrift(teamDelta3 float64) AlertSeverity {
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateSystemicBurnout evaluates the Systemic Burnout alert condition
+// for the percentage of team members with Burnout Red status.
+// PRD 7.2: Systemic Burnout Red: >=25% members Burnout Red
+func EvaluateSystemicBurnout(pctMembersWithBurnoutRed float64) AlertSeverity {
+	if pctMembersWithBurnoutRed >= 25 {
+		return AlertSeverityRed
+	}
+	return AlertSeverityNone
+}
