@@ -456,3 +456,21 @@ func TestEvaluateCustomerBusinessRisk_amberNotRedWhenOnlyOneConditionMet(t *test
 		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityAmber)
 	}
 }
+
+// TestEvaluateCustomerBusinessRisk_noneWhenBothHealthy tests that
+// EvaluateCustomerBusinessRisk returns None when both CSATN and MarginN
+// are healthy.
+// PRD 7.1: no alert when CSATN >= 60 AND MarginN >= 45
+func TestEvaluateCustomerBusinessRisk_noneWhenBothHealthy(t *testing.T) {
+	// Arrange: both metrics healthy
+	csatN := 80.0
+	marginN := 70.0
+
+	// Act
+	severity := EvaluateCustomerBusinessRisk(csatN, marginN)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityNone)
+	}
+}
