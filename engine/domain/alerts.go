@@ -80,6 +80,9 @@ func EvaluateFeedbackRisk(currentCritical, priorCritical int, hasPriorMonth bool
 //   Amber: CSATN < 60 OR MarginN < 45
 //   Red: CSATN < 50 AND MarginN < 40
 func EvaluateCustomerBusinessRisk(csatN, marginN float64) AlertSeverity {
+	if csatN < 50 && marginN < 40 {
+		return AlertSeverityRed
+	}
 	if csatN < 60 || marginN < 45 {
 		return AlertSeverityAmber
 	}
