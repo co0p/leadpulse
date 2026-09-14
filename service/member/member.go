@@ -8,14 +8,21 @@ import (
 )
 
 // Service provides use cases for team member management.
-// It now depends on the TeamMemberRepository interface instead of direct database access.
+// It depends on repositories and domain services for business logic enforcement.
 type Service struct {
-	repo domain.TeamMemberRepository
+	memberRepo        domain.TeamMemberRepository
+	entryRepo         domain.MonthlyEntryRepository
+	validationService *domain.ValidationService
 }
 
-// NewService creates a new member service with a repository implementation.
-func NewService(repo domain.TeamMemberRepository) *Service {
-	return &Service{repo: repo}
+// NewService creates a new member service with repositories and domain services.
+func NewService(memberRepo domain.TeamMemberRepository, entryRepo domain.MonthlyEntryRepository) *Service {
+	validationService := domain.NewValidationService(memberRepo, entryRepo)
+	return &Service{
+		memberRepo:        memberRepo,
+		entryRepo:         entryRepo,
+		validationService: validationService,
+	}
 }
 
 // NewServiceWithDB creates a service using the SQLite repository.
@@ -48,7 +55,7 @@ func (s *Service) AddMember(firstName, lastName string, seniority domain.Seniori
 
 	// Allocate an ID for the new member
 	// (In a full implementation, the repository might handle this)
-	allMembers, err := s.repo.FindActive()
+	allMembers, err := s.memberRepo.FindActive()
 	if err != nil {
 		return nil, fmt.Errorf("failed to allocate ID: %w", err)
 	}
@@ -68,8 +75,13 @@ func (s *Service) AddMember(firstName, lastName string, seniority domain.Seniori
 		return nil, err
 	}
 
+	// Validate uniqueness using domain service before persisting
+	if err := s.validationService.ValidateTeamMemberUniqueness(member); err != nil {
+		return nil, err
+	}
+
 	// Persist via repository
-	if err := s.repo.Save(member); err != nil {
+	if err := s.memberRepo.Save(member); err != nil {
 		return nil, fmt.Errorf("failed to save member: %w", err)
 	}
 
@@ -78,7 +90,7 @@ func (s *Service) AddMember(firstName, lastName string, seniority domain.Seniori
 
 // ListMembers returns all active team members.
 func (s *Service) ListMembers() ([]domain.TeamMember, error) {
-	members, err := s.repo.FindActive()
+	members, err := s.memberRepo.FindActive()
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +107,7 @@ func (s *Service) ListMembers() ([]domain.TeamMember, error) {
 
 // GetMember retrieves a single member by ID.
 func (s *Service) GetMember(id int64) (*domain.TeamMember, error) {
-	return s.repo.FindByID(domain.TeamMemberID(id))
+	return s.memberRepo.FindByID(domain.TeamMemberID(id))
 }
 
 // EditMember updates an existing member's information.
@@ -113,7 +125,7 @@ func (s *Service) EditMember(id int64, firstName, lastName string, seniority dom
 	}
 
 	// Fetch existing member
-	member, err := s.repo.FindByID(domain.TeamMemberID(id))
+	member, err := s.memberRepo.FindByID(domain.TeamMemberID(id))
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +151,7 @@ func (s *Service) EditMember(id int64, firstName, lastName string, seniority dom
 	}
 
 	// Persist via repository
-	if err := s.repo.Save(updatedMember); err != nil {
+	if err := s.memberRepo.Save(updatedMember); err != nil {
 		return nil, fmt.Errorf("failed to save member: %w", err)
 	}
 
@@ -148,7 +160,7 @@ func (s *Service) EditMember(id int64, firstName, lastName string, seniority dom
 
 // DeactivateMember soft-deletes a team member.
 func (s *Service) DeactivateMember(id int64) error {
-	member, err := s.repo.FindByID(domain.TeamMemberID(id))
+	member, err := s.memberRepo.FindByID(domain.TeamMemberID(id))
 	if err != nil {
 		return err
 	}
@@ -162,5 +174,5 @@ func (s *Service) DeactivateMember(id int64) error {
 	}
 
 	// Persist the deactivated state
-	return s.repo.Save(member)
+	return s.memberRepo.Save(member)
 }

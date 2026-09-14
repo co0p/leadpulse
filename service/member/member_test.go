@@ -8,8 +8,9 @@ import (
 
 // TestAddMember_createsAndReturns tests that AddMember calls the repository and returns the created member.
 func TestAddMember_createsAndReturns(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Call AddMember
 	member, err := svc.AddMember("Alice", "Chen", domain.SenioritySenior)
@@ -30,10 +31,30 @@ func TestAddMember_createsAndReturns(t *testing.T) {
 	}
 }
 
+// TestAddMember_rejectsDuplicate tests that AddMember rejects duplicate member names.
+func TestAddMember_rejectsDuplicate(t *testing.T) {
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
+
+	// Create first member
+	_, err := svc.AddMember("Alice", "Chen", domain.SenioritySenior)
+	if err != nil {
+		t.Fatalf("First AddMember failed: %v", err)
+	}
+
+	// Try to create second member with same name
+	_, err = svc.AddMember("Alice", "Chen", domain.SeniorityMid)
+	if err == nil {
+		t.Fatalf("Second AddMember should reject duplicate name")
+	}
+}
+
 // TestAddMember_rejectsEmptyName tests that AddMember rejects empty names.
 func TestAddMember_rejectsEmptyName(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Call AddMember with empty first name
 	_, err := svc.AddMember("", "Chen", domain.SenioritySenior)
@@ -44,8 +65,9 @@ func TestAddMember_rejectsEmptyName(t *testing.T) {
 
 // TestAddMember_rejectsInvalidSeniority tests that AddMember rejects invalid seniority.
 func TestAddMember_rejectsInvalidSeniority(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Call AddMember with invalid seniority
 	_, err := svc.AddMember("Alice", "Chen", domain.Seniority("Invalid"))
@@ -56,8 +78,9 @@ func TestAddMember_rejectsInvalidSeniority(t *testing.T) {
 
 // TestListMembers_returnsActiveMembers tests that ListMembers returns active members.
 func TestListMembers_returnsActiveMembers(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Add members
 	svc.AddMember("Alice", "Chen", domain.SenioritySenior)
@@ -76,8 +99,9 @@ func TestListMembers_returnsActiveMembers(t *testing.T) {
 
 // TestEditMember_updatesFields tests that EditMember updates member fields.
 func TestEditMember_updatesFields(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Add a member
 	member, _ := svc.AddMember("Bob", "Smith", domain.SeniorityMid)
@@ -95,8 +119,9 @@ func TestEditMember_updatesFields(t *testing.T) {
 
 // TestEditMember_rejectsInvalidSeniority tests that EditMember rejects invalid seniority.
 func TestEditMember_rejectsInvalidSeniority(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Add a member
 	member, _ := svc.AddMember("Bob", "Smith", domain.SeniorityMid)
@@ -110,8 +135,9 @@ func TestEditMember_rejectsInvalidSeniority(t *testing.T) {
 
 // TestDeactivateMember_removes tests that DeactivateMember hides the member.
 func TestDeactivateMember_removes(t *testing.T) {
-	repo := domain.NewInMemoryTeamMemberRepository()
-	svc := NewService(repo)
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+	svc := NewService(memberRepo, entryRepo)
 
 	// Add a member
 	member, _ := svc.AddMember("Carol", "Davis", domain.SeniorityPrincipal)

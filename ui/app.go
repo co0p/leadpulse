@@ -16,9 +16,10 @@ func NewMainWindow(app fyne.App, db *sql.DB) fyne.Window {
 
 	// Create repository implementations
 	memberRepo := store.NewSQLiteTeamMemberRepository(db)
+	entryRepo := store.NewSQLiteMonthlyEntryRepository(db)
 
 	// Create services with injected repositories
-	memberService := member.NewService(memberRepo)
+	memberService := member.NewService(memberRepo, entryRepo)
 
 	// Create screen registry
 	screenRegistry := screens.NewScreenRegistry(memberService)
