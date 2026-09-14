@@ -170,3 +170,22 @@ func TestEvaluateMoraleRisk_amberNotRedAtExactly35(t *testing.T) {
 	}
 }
 
+// TestEvaluateMoraleRisk_noneWhenAtOrAbove50 tests that EvaluateMoraleRisk
+// returns None when the current month's MoraleN is at or above 50, with no
+// prior month history triggering a sustained condition.
+// PRD 7.1: no alert when MoraleN >= 50
+func TestEvaluateMoraleRisk_noneWhenAtOrAbove50(t *testing.T) {
+	// Arrange: healthy current month, no prior month data
+	currentMoraleN := 60.0
+	priorMoraleN := 0.0
+	hasPriorMonth := false
+
+	// Act
+	severity := EvaluateMoraleRisk(currentMoraleN, priorMoraleN, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateMoraleRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentMoraleN, priorMoraleN, hasPriorMonth, severity, AlertSeverityNone)
+	}
+}
+
