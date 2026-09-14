@@ -53,11 +53,29 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
   - Feat: aeb62c1 (helpers), 6e01c7b (normalization), a866e78 (impact), 8cc6243 (dimensions), 5773707 (TII/completeness)
 - **Test command:** `go test -race ./...` → all pass
 
-## In Progress
+---
+
+## Done
 
 ### Alert Engine
 - **Job story:** When scores or trends cross defined thresholds, I want the system to raise Amber or Red alerts automatically, so that I can intervene before a situation worsens.
-- **Status:** Increment defined; planning next.
+- **Acceptance scenarios verified:**
+  - All 6 individual alert conditions (Performance Deterioration, Morale Risk, Burnout Risk, Feedback Risk, Customer/Business Risk, Data Quality Risk) classify Red/Amber/none exactly per PRD 7.1 thresholds, including boundary values ✓
+  - All 4 team-level alert conditions (Team Morale Drift, Team Delivery Drift, Systemic Burnout, Calibration Risk) classify Red/Amber/none exactly per PRD 7.2 thresholds, including boundary values ✓
+  - Each alert carries condition type, severity, and member reference — understandable without re-deriving from raw scores ✓
+  - Alert evaluation is deterministic: pure functions, no I/O, no global state; verified by static inspection and 5x repeat-run identical results ✓
+- **Evidence:**
+  - Engine layer: 39 new unit tests in `engine/domain/alerts_test.go` covering both Amber and Red thresholds at exact PRD boundary values for all 10 alert conditions
+  - Full domain suite: 55 tests passing (`go test -race ./engine/domain`)
+  - Full repo suite: `go test -race ./...` → all packages pass, no race conditions
+  - Build: `go build ./...` succeeds (harmless macOS linker warning only)
+- **Acceptance criteria:** All 5 met (AC-1: 6 individual conditions, AC-2: 4 team-level conditions, AC-3: alert detail sufficiency, AC-4: determinism, AC-5: boundary-value test coverage)
+- **Known limitation:** team-level alert inputs (% members Red, TII stddev history) are accepted as pre-computed parameters; the aggregation pipeline that derives them from real member data is not yet built (deferred to a future increment).
+- **Test command:** `go test -race ./engine/domain -run TestEvaluate` → all pass
+
+## In Progress
+
+_Awaiting next increment._
 
 ---
 

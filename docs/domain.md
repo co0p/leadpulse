@@ -178,10 +178,10 @@ The three-month change for a specific dimension score (e.g., `DG_Delta3 = DG_t â
 ## Alerts
 
 **Alert**
-A system-generated flag triggered when a signal, score, or trend crosses a defined threshold. Alerts are Amber (warning) or Red (critical). Defined for: Performance Deterioration, Morale Risk, Burnout Risk, Feedback Risk, Customer/Business Risk, Data Quality Risk.
+A system-generated flag triggered when a signal, score, or trend crosses a defined threshold. Alerts are Amber (warning) or Red (critical). Defined for: Performance Deterioration, Morale Risk, Burnout Risk, Feedback Risk, Customer/Business Risk, Data Quality Risk. Each alert carries the condition that triggered it, its severity, and the member it applies to â€” enough detail to act on without re-deriving it from raw scores.
 
 **Team-Level Alert**
-An alert triggered by aggregate team conditions: Team Morale Drift, Team Delivery Drift, Systemic Burnout, Calibration Risk.
+An alert triggered by aggregate team conditions: Team Morale Drift, Team Delivery Drift, Systemic Burnout, Calibration Risk. Team-level conditions are evaluated from pre-aggregated team-wide inputs (e.g., percentage of members with a given individual alert, team score standard deviation history) rather than computed directly from each member's raw data within the same step.
 
 ---
 
