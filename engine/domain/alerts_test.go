@@ -150,3 +150,23 @@ func TestEvaluateMoraleRisk_amberWhenSingleMonthBelow50(t *testing.T) {
 	}
 }
 
+// TestEvaluateMoraleRisk_amberNotRedAtExactly35 tests that
+// EvaluateMoraleRisk returns Amber (not Red) when current month MoraleN is
+// exactly 35 — the severe-current-month Red rule requires strictly below
+// 35, and no prior month data exists to trigger the sustained-Red rule.
+// PRD 7.1: Red requires MoraleN < 35 (strict); exactly 35 does not qualify
+func TestEvaluateMoraleRisk_amberNotRedAtExactly35(t *testing.T) {
+	// Arrange: current month exactly at the Red boundary (not below it)
+	currentMoraleN := 35.0
+	priorMoraleN := 0.0
+	hasPriorMonth := false
+
+	// Act
+	severity := EvaluateMoraleRisk(currentMoraleN, priorMoraleN, hasPriorMonth)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateMoraleRisk(current=%v, prior=%v, hasPrior=%v) = %v, want %v", currentMoraleN, priorMoraleN, hasPriorMonth, severity, AlertSeverityAmber)
+	}
+}
+
