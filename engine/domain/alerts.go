@@ -88,3 +88,15 @@ func EvaluateCustomerBusinessRisk(csatN, marginN float64) AlertSeverity {
 	}
 	return AlertSeverityNone
 }
+
+// EvaluateDataQualityRisk evaluates the Data Quality Risk alert condition
+// for a member's completeness percentage.
+// PRD 7.1:
+//   Amber: CompletenessPct < 85
+//   Red: CompletenessPct < 70
+func EvaluateDataQualityRisk(completenessPct float64) AlertSeverity {
+	if completenessPct < 85 {
+		return AlertSeverityAmber
+	}
+	return AlertSeverityNone
+}

@@ -474,3 +474,19 @@ func TestEvaluateCustomerBusinessRisk_noneWhenBothHealthy(t *testing.T) {
 		t.Errorf("EvaluateCustomerBusinessRisk(csatN=%v, marginN=%v) = %v, want %v", csatN, marginN, severity, AlertSeverityNone)
 	}
 }
+
+// TestEvaluateDataQualityRisk_amberBelow85 tests that EvaluateDataQualityRisk
+// returns Amber when CompletenessPct is exactly 84 (below 85).
+// PRD 7.1: Data Quality Risk Amber: CompletenessPct < 85
+func TestEvaluateDataQualityRisk_amberBelow85(t *testing.T) {
+	// Arrange: completeness just below Amber threshold
+	completenessPct := 84.0
+
+	// Act
+	severity := EvaluateDataQualityRisk(completenessPct)
+
+	// Assert
+	if severity != AlertSeverityAmber {
+		t.Errorf("EvaluateDataQualityRisk(completenessPct=%v) = %v, want %v", completenessPct, severity, AlertSeverityAmber)
+	}
+}
