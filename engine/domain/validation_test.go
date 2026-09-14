@@ -30,3 +30,37 @@ func TestValidateTeamMemberUniqueness_rejectsDuplicate(t *testing.T) {
 		t.Error("ValidateTeamMemberUniqueness should reject duplicate names")
 	}
 }
+
+// TestValidateEntryUniqueness_rejectsDuplicate tests that ValidationService
+// rejects duplicate entries for the same member and month.
+// Business rule: one entry per member per month.
+func TestValidateEntryUniqueness_rejectsDuplicate(t *testing.T) {
+	// Arrange
+	memberRepo := NewInMemoryTeamMemberRepository()
+	entryRepo := NewInMemoryMonthlyEntryRepository()
+	service := NewValidationService(memberRepo, entryRepo)
+
+	// Create and save an entry for member 1, month "2025-01"
+	// First, create a minimal MonthlyRawSignals with at least one signal filled
+	// morale=3 (0-5), csat=3 (1-5)
+	signals, _ := NewMonthlyRawSignals(3, 0, 3, 0, 0, 0, 0, 0, 0, 0)
+
+	// Create and save the entry
+	entry, createErr := NewMonthlyEntry(1, "2025-01", signals)
+	if createErr != nil {
+		t.Fatalf("Failed to create entry: %v", createErr)
+	}
+	saveErr := entryRepo.Save(entry)
+	if saveErr != nil {
+		t.Fatalf("Failed to save entry: %v", saveErr)
+	}
+
+	// Act
+	// Validation should fail because entry already exists
+	err := service.ValidateEntryUniqueness(TeamMemberID(1), "2025-01")
+
+	// Assert
+	if err == nil {
+		t.Error("ValidateEntryUniqueness should reject duplicate entries")
+	}
+}
