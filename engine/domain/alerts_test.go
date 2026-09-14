@@ -696,3 +696,20 @@ func TestEvaluateTeamDeliveryDrift_redAtNegativeTenDelta3(t *testing.T) {
 		t.Errorf("EvaluateTeamDeliveryDrift(delta3=%v) = %v, want %v", teamDelta3, severity, AlertSeverityRed)
 	}
 }
+
+// TestEvaluateTeamDeliveryDrift_noneAboveThreshold tests that
+// EvaluateTeamDeliveryDrift returns None when the team's Delta3 is above
+// the Red threshold.
+// PRD 7.2: no alert when team Delta3 > -10
+func TestEvaluateTeamDeliveryDrift_noneAboveThreshold(t *testing.T) {
+	// Arrange: healthy team Delta3
+	teamDelta3 := 5.0
+
+	// Act
+	severity := EvaluateTeamDeliveryDrift(teamDelta3)
+
+	// Assert
+	if severity != AlertSeverityNone {
+		t.Errorf("EvaluateTeamDeliveryDrift(delta3=%v) = %v, want %v", teamDelta3, severity, AlertSeverityNone)
+	}
+}
