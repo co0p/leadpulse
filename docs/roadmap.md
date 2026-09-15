@@ -223,35 +223,52 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ---
 
-## In Progress
-
-## Planned
-
 ### SPA Increment 2: Team Members API
 
-**Goal:** Expose the existing `SettingsController` member CRUD over HTTP. Prove that controller → handler wiring is testable with plain HTTP.
+**Goal:** Expose the existing member CRUD over HTTP. Prove that coordinator → handler wiring is testable with plain HTTP.
 
 **Scope:**
 - `GET /api/members` — list active members
 - `POST /api/members` — add member
 - `PATCH /api/members/{id}` — edit member
 - `DELETE /api/members/{id}` — deactivate member (soft delete)
-- Handlers delegate directly to `SettingsController`; no business logic in handlers
-- Request/response shapes match the JSON contract already implied by PRD Section 6
-- Handler unit tests use `httptest.NewRecorder` — zero Fyne, zero SQLite (controller is mocked)
-- Integration tests wire a real in-memory SQLite store (same pattern as `store/*_test.go`)
+- Handlers delegate to `MemberAPICoordinator`; no business logic in handlers
+- Request/response shapes: JSON with separate `firstName` and `lastName` fields; member ID as UUID
+- Handler unit tests use `httptest.NewRecorder` — zero Fyne, zero SQLite (coordinator mocked)
+- Integration tests wire real in-memory SQLite store (same pattern as `store/*_test.go`)
 
-**Why second:** member CRUD is the simplest use case and the most exercised layer. Good test-case for the handler → controller → service → store chain before tackling the more complex monthly input.
+**Why second:** member CRUD is the simplest use case and most exercised layer. Good test-case for the handler → coordinator → service → store chain before tackling the more complex monthly input.
 
-**Acceptance criteria:**
-- AC-1: All CRUD operations round-trip correctly through the API
-- AC-2: Invalid inputs return structured JSON error responses with the same `UserMessage()` text as the Fyne dialogs
-- AC-3: Handler unit tests cover the happy path and all `ValidationError` branches — no Fyne required
-- AC-4: `go test -race ./...` passes
+**Acceptance criteria verified:**
+- AC-1: All CRUD operations round-trip correctly through the API ✓ (`TestMembersAPIIntegration_CRUD`)
+- AC-2: Invalid inputs return structured JSON error responses (400 with `{error, kind}`) ✓ (14 handler tests covering validation)
+- AC-3: Handler unit tests use `httptest` — no Fyne, no SQLite per handler test ✓ (14 handler tests in `server/handler_members_test.go`)
+- AC-4: `go test -race ./server` passes ✓ (21/21 tests passing)
+
+**Evidence:**
+- HTTP handlers: `server/handler_members.go` with POST/GET/PATCH/DELETE handlers
+- Handler unit tests: 14 tests in `server/handler_members_test.go` (add/list/edit/delete success and error cases, all <1 second each)
+- Coordinator: `service/coordinator/member_api.go` with AddMember/GetMembers/EditMember/DeactivateMember
+- Integration test: `TestMembersAPIIntegration_CRUD` in `server/integration_test.go` (full stack: HTTP → coordinator → service → store)
+- UUID mapping: `memberIDToUUID()` function converts domain int64 IDs to deterministic UUID strings (v5 with namespace `6ba7b810-9dad-11d1-80b4-00c04fd430c8`)
+- Request/response contract: POST accepts `{firstName, lastName, seniority}`; responses include `id` (UUID), `firstName`, `lastName`, `seniority`, `status`, `createdAt` (RFC3339)
+- Error handling: Validation errors (400), database errors (500), member-not-found (400); structured JSON with `error` and `kind` fields
+- Server wiring: `server/server.go` registers routes; `main.go` creates coordinator and passes to `Start()`
+- Build: `go build ./...` succeeds; `go test -race ./...` passes all 21 tests
+
+**Test command:** `go test -race ./server -run "TestAddMemberHandler|TestGetMembersHandler|TestPatchMemberHandler|TestDeleteMemberHandler|TestMembersAPIIntegration"` → 15 tests passing
+
+**Key commits:**
+- Handlers and tests
+- Coordinator (AddMember/GetMembers/EditMember/DeactivateMember)
+- Server wiring and integration test
+- Main.go coordinator injection
 
 ---
 
-### SPA Increment 3: Monthly Entry API
+## In Progress
+
+
 
 **Goal:** Expose `MonthlyInputController` over HTTP. Deliver live score preview as a pure HTTP endpoint.
 

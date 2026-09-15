@@ -100,6 +100,37 @@ The system has four layers with different risk profiles:
 - Cover happy path and constraint violations (foreign keys, NOT NULL, unique constraints).
 - **Standard helper: `setupTestDB()`** — initializes an in-memory SQLite database with the full schema applied. All store tests must call `setupTestDB()` before creating fixtures. This ensures test isolation and consistent schema versioning across all tests. See `store/member_test.go` for the reference implementation.
 
+**HTTP handler tests:**
+- Live in `server/<file>_test.go` (e.g., `server/handler_members_test.go`).
+- Use `net/http/httptest.NewRecorder()` to capture HTTP responses without starting a real server.
+- Use hand-written mock coordinators (mock struct implementing the coordinator interface) — no mocking library overhead.
+- Each test: mock the coordinator, create an HTTP request, call the handler, verify HTTP status code and JSON response body.
+- Cover success case and all error cases: validation errors (400), not-found (400), database failures (500).
+- Handler tests are fast (no database access, no I/O), isolated (each test mocks its dependencies), and independent of other handler tests.
+- **Canonical pattern:**
+  ```go
+  // Mock coordinator with test fixture
+  mockCoord := &MockMemberAPICoordinator{
+    members: []domain.TeamMember{ /* fixture */ },
+    err:     nil, // or an error for error cases
+  }
+
+  // Create HTTP request
+  req := httptest.NewRequest("GET", "/api/members", nil)
+  w := httptest.NewRecorder()
+
+  // Call handler
+  HandlerGetMembers(w, req, mockCoord)
+
+  // Verify HTTP response
+  if w.Code != http.StatusOK {
+    t.Errorf("expected 200, got %d", w.Code)
+  }
+  var resp map[string][]interface{}
+  json.NewDecoder(w.Body).Decode(&resp)
+  // Assert response structure and data
+  ```
+
 **All tests:**
 - Must not share mutable state. Each test case sets up its own fixtures.
 - Test must be independent: can run in any order, can run in parallel with `-race`.

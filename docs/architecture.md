@@ -93,6 +93,59 @@ No external network connections. No cloud. No server. All data on-device.
 - **Handlers:** Receive HTTP requests, parse JSON/form data, call coordinators, map results to HTTP responses. No business logic in handlers; all logic delegated to coordinators.
 - **Constraints:** No direct store or engine access; no database connections. All persistence through coordinators and services.
 
+### HTTP Handlers — Request/Response Adapter Pattern
+
+Each HTTP handler is a thin adapter:
+
+1. **Parse:** Extract JSON request body, path parameters, query strings into plain Go values
+2. **Validate:** Check request format (no business validation; business validation is in coordinator)
+3. **Delegate:** Call coordinator method with application-level inputs (not HTTP types)
+4. **Map errors:** Convert coordinator errors to HTTP status codes and error JSON
+5. **Serialize:** Convert result to JSON and write HTTP response
+
+**Example:** `HandlerAddMember` in `server/handler_members.go`:
+```go
+func HandlerAddMember(w http.ResponseWriter, r *http.Request, coord *MemberAPICoordinator) {
+  // Parse JSON request
+  var req AddMemberRequest
+  json.NewDecoder(r.Body).Decode(&req)
+  
+  // Delegate to coordinator (business logic)
+  member, err := coord.AddMember(req.FirstName, req.LastName, req.Seniority)
+  
+  // Map error to HTTP response
+  if err != nil {
+    // error is of type coordinator.ValidationError
+    w.WriteHeader(http.StatusBadRequest) // or 500 for database errors
+    json.NewEncoder(w).Encode(map[string]interface{}{
+      "error": err.UserMessage(),
+      "kind":  err.Kind,
+    })
+    return
+  }
+  
+  // Serialize success response
+  w.WriteHeader(http.StatusCreated)
+  json.NewEncoder(w).Encode(map[string]interface{}{
+    "id":        memberIDToUUID(member.ID()),
+    "firstName": member.Name().First,
+    "lastName":  member.Name().Last,
+    "seniority": member.Seniority(),
+    "status":    "active",
+    "createdAt": member.CreatedAt().Format(time.RFC3339),
+  })
+}
+```
+
+**Characteristics:**
+- No conditional business logic (e.g., "if member is senior, discount the score")
+- No loops or loops over domain objects (that's the coordinator's job)
+- Typically 15–20 lines of code (parse, validate format, delegate, map error, serialize)
+- All coordination, validation, and computation in coordinator
+- Testable without HTTP: test the coordinator directly; test the handler with `httptest` and a mocked coordinator
+
+**Testing:** Use `net/http/httptest.NewRecorder()` to capture responses. Mock the coordinator with an in-memory mock struct. Verify HTTP status codes, JSON structure, and error messages.
+
 ### `service/coordinator/` — Orchestration Layer
 - **Technology:** Go (pure functions, no I/O)
 - **Responsibility:** Orchestrate multi-step workflows. Accept application-level inputs (member IDs, month strings, signal maps — not HTTP types). Validate, sequence service calls, handle cross-service dependencies, return domain error types.

@@ -700,6 +700,180 @@ Before adding a new endpoint:
 
 ---
 
+## Team Members API
+
+The Members API exposes team member CRUD operations. This section documents the actual implementation and request/response contracts.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/members` | List active members |
+| POST | `/api/members` | Add a new member |
+| PATCH | `/api/members/{id}` | Edit member details |
+| DELETE | `/api/members/{id}` | Deactivate member (soft delete) |
+
+### Request/Response Contract
+
+**POST /api/members — Add Member**
+
+Request body:
+```json
+{
+  "firstName": "Alice",
+  "lastName": "Smith",
+  "seniority": "Senior"
+}
+```
+
+Response (HTTP 201):
+```json
+{
+  "id": "9ca3fa77-9ce0-595f-aff7-f03880deac96",
+  "firstName": "Alice",
+  "lastName": "Smith",
+  "seniority": "Senior",
+  "status": "active",
+  "createdAt": "2026-09-15T14:22:00Z"
+}
+```
+
+Required fields: `firstName`, `lastName`, `seniority` (non-empty strings).
+Valid seniority values: `Junior`, `Mid`, `Senior`, `Principal`.
+
+**GET /api/members — List Members**
+
+Request: no body.
+
+Response (HTTP 200):
+```json
+{
+  "members": [
+    {
+      "id": "9ca3fa77-9ce0-595f-aff7-f03880deac96",
+      "firstName": "Alice",
+      "lastName": "Smith",
+      "seniority": "Senior",
+      "status": "active",
+      "createdAt": "2026-09-15T14:22:00Z"
+    },
+    {
+      "id": "8db2eb66-8bdf-494e-9ee6-e02771cdbfa5",
+      "firstName": "Bob",
+      "lastName": "Jones",
+      "seniority": "Mid",
+      "status": "active",
+      "createdAt": "2026-09-14T10:15:00Z"
+    }
+  ]
+}
+```
+
+Returns only active members (status = "active"). Deactivated members are excluded.
+
+**PATCH /api/members/{id} — Edit Member**
+
+Request body (all fields optional; at least one required):
+```json
+{
+  "firstName": "Alice",
+  "lastName": "Jones",
+  "seniority": "Principal"
+}
+```
+
+Response (HTTP 200):
+```json
+{
+  "id": "9ca3fa77-9ce0-595f-aff7-f03880deac96",
+  "firstName": "Alice",
+  "lastName": "Jones",
+  "seniority": "Principal",
+  "status": "active",
+  "createdAt": "2026-09-15T14:22:00Z"
+}
+```
+
+Note: If firstName or lastName are updated, both must be non-empty. If only one is provided, it is updated; the other retains its prior value.
+
+**DELETE /api/members/{id} — Deactivate Member**
+
+Request: no body.
+
+Response (HTTP 204 No Content): no body, member is soft-deleted.
+
+### Error Responses
+
+All errors return a JSON object with `error` and `kind` fields:
+
+```json
+{
+  "error": "First name and last name are required",
+  "kind": "invalid_field"
+}
+```
+
+| HTTP Status | Error Scenario | Example Message |
+|---|---|---|
+| 400 | First name or last name is empty | "First name and last name are required" |
+| 400 | Invalid seniority level | "Invalid seniority level" |
+| 400 | Member not found (PATCH/DELETE) | "Member not found" |
+| 400 | PATCH with no fields provided | "At least one field must be provided to update" |
+| 500 | Database error | "Failed to add member. Please try again." |
+
+Error `kind` field values:
+- `invalid_field` — validation error
+- `database_failure` — database operation failed
+
+### Member ID Format
+
+Member IDs in the API are UUID v5 strings (e.g., `9ca3fa77-9ce0-595f-aff7-f03880deac96`).
+
+**Why UUID?** See `docs/adr/ADR-20260915-uuid-member-ids.md` for the rationale. In short: UUIDs are globally unique, stable across database operations, and REST-compliant. The domain uses int64 IDs internally; handlers map them bidirectionally using a deterministic UUID v5 function.
+
+### Handler Implementation
+
+Handlers are located in `server/handler_members.go`:
+
+```go
+HandlerAddMember(w, r, coordinator)      // POST /api/members
+HandlerGetMembers(w, r, coordinator)     // GET /api/members
+HandlerEditMember(w, r, coordinator, id) // PATCH /api/members/{id}
+HandlerDeleteMember(w, r, coordinator, id)// DELETE /api/members/{id}
+```
+
+Each handler:
+1. Parses the request (JSON body and path parameters)
+2. Calls `MemberAPICoordinator` methods (business logic)
+3. Maps errors to HTTP status codes and JSON responses
+4. Serializes member(s) to JSON with UUID and status
+
+No business logic is in the handlers. Validation, persistence, and error handling are delegated to `service/coordinator/member_api.go`.
+
+### Testing
+
+**Unit tests:** `server/handler_members_test.go` with 14 tests covering success and error cases. Coordinator is mocked; no database setup per test.
+
+**Integration test:** `server/integration_test.go#TestMembersAPIIntegration_CRUD` verifies full stack (handler → coordinator → service → store) with in-memory SQLite.
+
+Test command:
+```
+go test -race ./server -run "Handler|Integration"
+```
+
+All 21 tests pass in <1 second.
+
+### References
+
+- `server/handler_members.go` — Handler implementations
+- `server/handler_members_test.go` — Unit tests
+- `server/integration_test.go` — Full-stack test
+- `service/coordinator/member_api.go` — Business logic (coordinator)
+- `docs/adr/ADR-20260915-uuid-member-ids.md` — UUID mapping decision
+- `docs/adr/ADR-20260915-clean-architecture-layering.md` — Coordinator pattern
+
+---
+
 ## References
 
 - `docs/architecture.md` — Overall system layers and dependency direction

@@ -9,6 +9,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"leadpulse/server"
+	"leadpulse/service/coordinator"
 	"leadpulse/service/member"
 	"leadpulse/service/monthly"
 	"leadpulse/store"
@@ -38,15 +39,14 @@ func main() {
 
 	// Initialize application services (use case layer)
 	memberService := member.NewService(memberRepo, entryRepo)
-	monthlyService := monthly.NewService(memberRepo, entryRepo)
+	_ = monthly.NewService(memberRepo, entryRepo) // Will be used for monthly entry API in future
 
-	// Start HTTP server with coordinators available for HTTP handlers
-	// (Coordinators can be injected into handlers via dependency injection)
-	_ = memberService  // Available for HTTP handlers
-	_ = monthlyService // Available for HTTP handlers
+	// Initialize coordinators (HTTP API layer)
+	memberAPICoord := coordinator.NewMemberAPICoordinator(memberService)
+	memberAPICoord.Load()
 
-	// Boot HTTP server (blocks indefinitely)
-	if err := server.Start("localhost:8080"); err != nil {
+	// Boot HTTP server with coordinators for API handlers (blocks indefinitely)
+	if err := server.Start("localhost:8080", memberAPICoord); err != nil {
 		log.Fatalf("HTTP server error: %v", err)
 	}
 }
