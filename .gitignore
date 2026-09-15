@@ -1,4 +1,3 @@
-.agent
 build/
 node_modules
 frontend/dist

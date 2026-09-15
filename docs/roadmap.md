@@ -268,26 +268,32 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ## In Progress
 
+### Clean Architecture for Member Operations
 
-
-**Goal:** Expose `MonthlyInputController` over HTTP. Deliver live score preview as a pure HTTP endpoint.
+**Goal:** Refactor member CRUD to follow clean architecture and domain-driven design: replace `MemberAPICoordinator` with explicit use cases that depend on repository abstractions, achieving testability, portability, and clear DDD vocabulary.
 
 **Scope:**
-- `GET /api/entries?member_id=&month=` — get entry for a member/month
-- `POST /api/entries` — save entry
-- `POST /api/entries/preview` — compute TII + completeness from raw signals without persisting (maps to `PreviewScores`)
-- `GET /api/entries/previous?member_id=&month=` — get prior month entry for copy-from-previous
-- Same handler/controller separation and test pattern as Increment 2
+- Replace `MemberAPICoordinator` with `AddMemberUseCase`, `GetMembersUseCase`, `EditMemberUseCase`, `DeactivateMemberUseCase`
+- Define `MemberRepository` interface in `domain/member/` (abstraction only)
+- Implement `InMemoryMemberRepository` in `storage/memory/` (for tests)
+- Implement `SQLiteTeamMemberRepository` in `storage/sqlite/` (for production)
+- Refactor `server/handler_members.go` to call use cases instead of coordinator
+- Maintain clean dependency graph: presentation → application → domain (no circular imports)
+
+**Why:** Use cases are portable to CLI, mobile, and other clients without HTTP coupling. DDD repositories hide storage details; tests inject in-memory implementations. Clear vocabulary matches industry standards (Clean Architecture, Domain-Driven Design).
 
 **Acceptance criteria:**
-- AC-1: Preview endpoint returns TII and completeness without writing to the database
-- AC-2: Save endpoint persists the entry; a subsequent GET returns the same data
-- AC-3: Out-of-range signal values return a structured error with PRD-defined range in the message
-- AC-4: Handler unit tests use mocked controller — no Fyne, no SQLite, no OpenGL
+- AC-1: Four use cases exist in `application/member/` with passing unit tests
+- AC-2: `MemberRepository` interface defined in `domain/member/`; in-memory and SQLite implementations exist in `storage/memory/` and `storage/sqlite/`
+- AC-3: HTTP handlers call `Execute()` methods, not coordinator methods
+- AC-4: `go test -race ./...` passes with 21+ tests; no functionality lost
+- AC-5: No circular imports; dependency flow is clean (presentation → application → domain)
 
 ---
 
-### SPA Increment 4: Settings Screen (First SPA Replacement)
+## Planned
+
+### SPA Increment 3: Monthly Entry API
 
 **Goal:** Build the Settings screen (member list, add/edit/deactivate) as a browser-rendered SPA page backed by the Members API. This is the first Fyne screen retired.
 
