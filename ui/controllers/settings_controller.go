@@ -44,10 +44,35 @@ func (c *SettingsController) GetMembers() []domain.TeamMember {
 
 // AddMember creates a new team member and persists it.
 // After success, the member list is reloaded to reflect the new member.
+//
+// Returns a ValidationError if:
+// - firstName or lastName is empty
+// - Member creation fails (wrapped with user-friendly message)
 func (c *SettingsController) AddMember(firstName, lastName string, seniority domain.Seniority) error {
+	if firstName == "" || lastName == "" {
+		return NewValidationError(
+			ValidationErrorKindInvalidField,
+			"First name and last name are required",
+			nil,
+		)
+	}
+
+	if !seniority.Valid() {
+		return NewValidationError(
+			ValidationErrorKindInvalidField,
+			"Invalid seniority level",
+			nil,
+		)
+	}
+
 	_, err := c.memberService.AddMember(firstName, lastName, seniority)
 	if err != nil {
-		return err
+		// Wrap service layer errors
+		return WrapError(
+			ValidationErrorKindDatabaseFailure,
+			"Failed to add member. Please try again.",
+			err,
+		)
 	}
 
 	// Reload members list
@@ -56,10 +81,35 @@ func (c *SettingsController) AddMember(firstName, lastName string, seniority dom
 
 // EditMember updates an existing team member's information.
 // After success, the member list is reloaded.
+//
+// Returns a ValidationError if:
+// - firstName or lastName is empty
+// - Member update fails (wrapped with user-friendly message)
 func (c *SettingsController) EditMember(memberID int64, firstName, lastName string, seniority domain.Seniority) error {
+	if firstName == "" || lastName == "" {
+		return NewValidationError(
+			ValidationErrorKindInvalidField,
+			"First name and last name are required",
+			nil,
+		)
+	}
+
+	if !seniority.Valid() {
+		return NewValidationError(
+			ValidationErrorKindInvalidField,
+			"Invalid seniority level",
+			nil,
+		)
+	}
+
 	_, err := c.memberService.EditMember(memberID, firstName, lastName, seniority)
 	if err != nil {
-		return err
+		// Wrap service layer errors
+		return WrapError(
+			ValidationErrorKindDatabaseFailure,
+			"Failed to edit member. Please try again.",
+			err,
+		)
 	}
 
 	// Reload members list
@@ -68,10 +118,17 @@ func (c *SettingsController) EditMember(memberID int64, firstName, lastName stri
 
 // DeactivateMember marks a team member as inactive.
 // After success, the member list is reloaded.
+//
+// Returns a ValidationError if member deactivation fails (wrapped with user-friendly message).
 func (c *SettingsController) DeactivateMember(memberID int64) error {
 	err := c.memberService.DeactivateMember(memberID)
 	if err != nil {
-		return err
+		// Wrap service layer errors
+		return WrapError(
+			ValidationErrorKindDatabaseFailure,
+			"Failed to deactivate member. Please try again.",
+			err,
+		)
 	}
 
 	// Reload members list

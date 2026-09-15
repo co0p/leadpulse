@@ -210,7 +210,12 @@ func NewMonthlyInputScreen(memberService *member.Service, monthlyService *monthl
 
 		// Use controller to select member and load data
 		if err := controller.SelectMember(int(id)); err != nil {
-			statusLabel.SetText(err.Error())
+			// Handle ValidationError specially to show user-friendly message
+			if ve, ok := err.(*controllers.ValidationError); ok {
+				statusLabel.SetText(ve.UserMessage())
+			} else {
+				statusLabel.SetText("An unexpected error occurred. Please try again.")
+			}
 			return
 		}
 
@@ -271,7 +276,13 @@ func NewMonthlyInputScreen(memberService *member.Service, monthlyService *monthl
 
 		// Save via controller
 		if err := controller.SaveMember(); err != nil {
-			statusLabel.SetText(err.Error())
+			// Handle ValidationError specially to show user-friendly message
+			if ve, ok := err.(*controllers.ValidationError); ok {
+				statusLabel.SetText(ve.UserMessage())
+			} else {
+				// Fallback for non-ValidationError (should not happen)
+				statusLabel.SetText("An unexpected error occurred. Please try again.")
+			}
 			statusLabel.Show()
 			return
 		}
@@ -294,7 +305,12 @@ func NewMonthlyInputScreen(memberService *member.Service, monthlyService *monthl
 
 	copyButton := widget.NewButton("Copy from previous month", func() {
 		if err := controller.CopyFromPreviousMonth(); err != nil {
-			statusLabel.SetText(err.Error())
+			// Handle ValidationError specially to show user-friendly message
+			if ve, ok := err.(*controllers.ValidationError); ok {
+				statusLabel.SetText(ve.UserMessage())
+			} else {
+				statusLabel.SetText("An unexpected error occurred. Please try again.")
+			}
 			statusLabel.Show()
 			return
 		}

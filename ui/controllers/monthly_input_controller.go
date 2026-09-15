@@ -71,7 +71,11 @@ func (c *MonthlyInputController) Validate() error {
 // Clears form fields before loading new member's data.
 func (c *MonthlyInputController) SelectMember(index int) error {
 	if index < 0 || index >= len(c.members) {
-		return fmt.Errorf("invalid member index: %d", index)
+		return NewValidationError(
+			ValidationErrorKindUnknown,
+			"Unable to select member. Please try again.",
+			fmt.Errorf("invalid member index: %d", index),
+		)
 	}
 
 	c.selectedIndex = index
@@ -127,7 +131,11 @@ func (c *MonthlyInputController) SetFormField(fieldName string, value *int) erro
 	case "evidence_notes_count":
 		c.formState.EvidenceNotesCount = value
 	default:
-		return fmt.Errorf("unknown field: %s", fieldName)
+		return NewValidationError(
+			ValidationErrorKindUnknown,
+			"An unexpected error occurred. Please try again.",
+			fmt.Errorf("unknown field: %s", fieldName),
+		)
 	}
 	return nil
 }
@@ -146,9 +154,27 @@ func (c *MonthlyInputController) ClearForm() {
 // Creates new entry if one doesn't exist; updates if it does.
 // FIX for pointer aliasing bug: Creates a copy of each value to avoid
 // multiple pointers referencing the same memory location.
+//
+// Returns a ValidationError if:
+// - No member is selected
+// - All form fields are empty (no data to save)
+// - Service layer fails (wrapped with user-friendly message)
 func (c *MonthlyInputController) SaveMember() error {
 	if c.currentMember == nil {
-		return fmt.Errorf("no member selected")
+		return NewValidationError(
+			ValidationErrorKindNoMemberSelected,
+			"Please select a member before saving",
+			nil,
+		)
+	}
+
+	// Check if any data has been entered
+	if !c.hasAnyData() {
+		return NewValidationError(
+			ValidationErrorKindNoData,
+			"Please enter at least one signal value before saving",
+			nil,
+		)
 	}
 
 	// Helper: creates a copy of the pointer to avoid aliasing
@@ -164,11 +190,20 @@ func (c *MonthlyInputController) SaveMember() error {
 	memberID := int64(c.currentMember.ID())
 
 	// Check if entry exists
-	existing, _ := c.monthlyService.GetEntry(memberID, c.currentMonth)
-	var err error
+	existing, err := c.monthlyService.GetEntry(memberID, c.currentMonth)
+	if err != nil {
+		// Wrap database errors with user-friendly message
+		return WrapError(
+			ValidationErrorKindDatabaseFailure,
+			"Failed to save: unable to check existing data. Please try again.",
+			err,
+		)
+	}
+
+	var saveErr error
 	if existing != nil {
 		// Update existing
-		_, err = c.monthlyService.UpdateEntry(
+		_, saveErr = c.monthlyService.UpdateEntry(
 			memberID, c.currentMonth,
 			copyPtr(c.formState.Morale),
 			copyPtr(c.formState.Billability),
@@ -183,7 +218,7 @@ func (c *MonthlyInputController) SaveMember() error {
 		)
 	} else {
 		// Create new
-		_, err = c.monthlyService.CreateEntry(
+		_, saveErr = c.monthlyService.CreateEntry(
 			memberID, c.currentMonth,
 			copyPtr(c.formState.Morale),
 			copyPtr(c.formState.Billability),
@@ -198,7 +233,31 @@ func (c *MonthlyInputController) SaveMember() error {
 		)
 	}
 
-	return err
+	if saveErr != nil {
+		// Wrap service layer errors with user-friendly message
+		return WrapError(
+			ValidationErrorKindDatabaseFailure,
+			"Failed to save: please check your data and try again.",
+			saveErr,
+		)
+	}
+
+	return nil
+}
+
+// hasAnyData checks if at least one signal field has been set.
+func (c *MonthlyInputController) hasAnyData() bool {
+	state := c.formState
+	return state.Morale != nil ||
+		state.Billability != nil ||
+		state.CSAT != nil ||
+		state.NetMargin != nil ||
+		state.PositiveFeedback != nil ||
+		state.CriticalFeedback != nil ||
+		state.OvertimeHours != nil ||
+		state.DeliveryReliability != nil ||
+		state.MentoringHours != nil ||
+		state.EvidenceNotesCount != nil
 }
 
 // GetMembers returns the list of all team members.
@@ -225,15 +284,26 @@ func (c *MonthlyInputController) GetCurrentMonth() string {
 }
 
 // CopyFromPreviousMonth loads data from the previous month and populates the form.
+// Returns a ValidationError if:
+// - No member is selected (programming error)
+// - No entry found for previous month (user-facing)
 func (c *MonthlyInputController) CopyFromPreviousMonth() error {
 	if c.currentMember == nil {
-		return fmt.Errorf("no member selected")
+		return NewValidationError(
+			ValidationErrorKindUnknown,
+			"No member selected. Please select a member first.",
+			fmt.Errorf("no member selected"),
+		)
 	}
 
 	prevMonth := previousMonth(c.currentMonth)
 	entry, err := c.monthlyService.GetEntry(int64(c.currentMember.ID()), prevMonth)
 	if err != nil || entry == nil {
-		return fmt.Errorf("no entry found for previous month")
+		return NewValidationError(
+			ValidationErrorKindNoData,
+			"No data available for the previous month",
+			nil,
+		)
 	}
 
 	signals := entry.Signals()

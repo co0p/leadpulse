@@ -1,6 +1,8 @@
 package screens
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -54,7 +56,17 @@ func NewSettingsScreen(memberService *member.Service) fyne.CanvasObject {
 			}
 			// Wire Deactivate button
 			hbox.Objects[4].(*widget.Button).OnTapped = func() {
-				_ = controller.DeactivateMember(int64(m.ID()))
+				err := controller.DeactivateMember(int64(m.ID()))
+				if err != nil {
+					w := fyne.CurrentApp().Driver().AllWindows()[0]
+					// Handle ValidationError specially to show user-friendly message
+					if ve, ok := err.(*controllers.ValidationError); ok {
+						dialog.ShowError(fmt.Errorf("%s", ve.UserMessage()), w)
+					} else {
+						dialog.ShowError(fmt.Errorf("An unexpected error occurred. Please try again."), w)
+					}
+					return
+				}
 				memberList.Refresh()
 			}
 		},
@@ -95,11 +107,20 @@ func showAddDialog(controller *controllers.SettingsController, list *widget.List
 		if !confirmed {
 			return
 		}
-		_ = controller.AddMember(
+		err := controller.AddMember(
 			firstNameEntry.Text,
 			lastNameEntry.Text,
 			domain.Seniority(senioritySelect.Selected),
 		)
+		if err != nil {
+			// Handle ValidationError specially to show user-friendly message
+			if ve, ok := err.(*controllers.ValidationError); ok {
+				dialog.ShowError(fmt.Errorf("%s", ve.UserMessage()), w)
+			} else {
+				dialog.ShowError(fmt.Errorf("An unexpected error occurred. Please try again."), w)
+			}
+			return
+		}
 		list.Refresh()
 	}, w)
 }
@@ -127,12 +148,21 @@ func showEditDialog(controller *controllers.SettingsController, list *widget.Lis
 		if !confirmed {
 			return
 		}
-		_ = controller.EditMember(
+		err := controller.EditMember(
 			id,
 			firstNameEntry.Text,
 			lastNameEntry.Text,
 			domain.Seniority(senioritySelect.Selected),
 		)
+		if err != nil {
+			// Handle ValidationError specially to show user-friendly message
+			if ve, ok := err.(*controllers.ValidationError); ok {
+				dialog.ShowError(fmt.Errorf("%s", ve.UserMessage()), w)
+			} else {
+				dialog.ShowError(fmt.Errorf("An unexpected error occurred. Please try again."), w)
+			}
+			return
+		}
 		list.Refresh()
 	}, w)
 }

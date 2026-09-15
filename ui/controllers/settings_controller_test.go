@@ -141,3 +141,65 @@ func TestSettingsController_DeactivateMember(t *testing.T) {
 		t.Errorf("expected 0 members after deactivate, got %d", controller.GetMemberCount())
 	}
 }
+
+func TestSettingsController_AddMember_EmptyName(t *testing.T) {
+	// Setup
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	memberService := membersvc.NewService(memberRepo, entryRepo)
+
+	// Test
+	controller := NewSettingsController(memberService)
+	controller.Load()
+
+	// Try to add member with empty first name
+	err := controller.AddMember("", "Engineer", domain.SeniorityMid)
+
+	// Verify validation error
+	if err == nil {
+		t.Fatal("expected ValidationError, got nil")
+	}
+
+	ve, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	if ve.Kind != ValidationErrorKindInvalidField {
+		t.Errorf("expected kind InvalidField, got %v", ve.Kind)
+	}
+}
+
+func TestSettingsController_EditMember_EmptyName(t *testing.T) {
+	// Setup
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	name, _ := domain.NewFullName("Alice", "Engineer")
+	member, _ := domain.NewTeamMember(1, name, domain.SeniorityMid)
+	memberRepo.Save(member)
+
+	memberService := membersvc.NewService(memberRepo, entryRepo)
+
+	// Test
+	controller := NewSettingsController(memberService)
+	controller.Load()
+
+	// Try to edit with empty last name
+	err := controller.EditMember(1, "Alice", "", domain.SeniorityMid)
+
+	// Verify validation error
+	if err == nil {
+		t.Fatal("expected ValidationError, got nil")
+	}
+
+	ve, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	if ve.Kind != ValidationErrorKindInvalidField {
+		t.Errorf("expected kind InvalidField, got %v", ve.Kind)
+	}
+}

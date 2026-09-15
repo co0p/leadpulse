@@ -201,3 +201,72 @@ func TestMonthlyInputController_CopyFromPreviousMonth(t *testing.T) {
 		t.Errorf("expected billability=80 after copy, got %v", state.Billability)
 	}
 }
+
+func TestMonthlyInputController_SaveMember_NoDataEntered(t *testing.T) {
+	// Setup
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	name, _ := domain.NewFullName("Charlie", "Developer")
+	member, _ := domain.NewTeamMember(1, name, domain.SeniorityMid)
+	memberRepo.Save(member)
+
+	memberService := membersvc.NewService(memberRepo, entryRepo)
+	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
+
+	// Test
+	controller := NewMonthlyInputController(memberService, monthlyService)
+	controller.Load()
+	controller.SelectMember(0)
+
+	// Try to save without entering any data
+	err := controller.SaveMember()
+
+	// Verify
+	if err == nil {
+		t.Fatal("expected ValidationError, got nil")
+	}
+
+	ve, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	if ve.Kind != ValidationErrorKindNoData {
+		t.Errorf("expected kind NoData, got %v", ve.Kind)
+	}
+
+	if ve.Message != "Please enter at least one signal value before saving" {
+		t.Errorf("unexpected message: %s", ve.Message)
+	}
+}
+
+func TestMonthlyInputController_SaveMember_NoMemberSelected(t *testing.T) {
+	// Setup
+	memberRepo := domain.NewInMemoryTeamMemberRepository()
+	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
+
+	memberService := membersvc.NewService(memberRepo, entryRepo)
+	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
+
+	// Test — create controller but don't select a member
+	controller := NewMonthlyInputController(memberService, monthlyService)
+	controller.Load()
+
+	// Try to save without selecting a member
+	err := controller.SaveMember()
+
+	// Verify
+	if err == nil {
+		t.Fatal("expected ValidationError, got nil")
+	}
+
+	ve, ok := err.(*ValidationError)
+	if !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	if ve.Kind != ValidationErrorKindNoMemberSelected {
+		t.Errorf("expected kind NoMemberSelected, got %v", ve.Kind)
+	}
+}
