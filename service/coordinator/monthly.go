@@ -1,4 +1,4 @@
-package controllers
+package coordinator
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 	"leadpulse/service/monthly"
 )
 
-// MonthlyInputController owns all business logic for the Monthly Input screen.
+// MonthlyInputCoordinator owns all business logic for the Monthly Input workflow.
 // It manages form state, member selection, data persistence, and validation.
-// Controllers have zero Fyne dependencies and are fully unit testable.
-type MonthlyInputController struct {
+// Coordinators have zero UI dependencies and are fully unit testable.
+type MonthlyInputCoordinator struct {
 	memberService  *member.Service
 	monthlyService *monthly.Service
 
@@ -38,9 +38,9 @@ type MonthlyInputState struct {
 	EvidenceNotesCount   *int
 }
 
-// NewMonthlyInputController creates a new controller for the Monthly Input screen.
-func NewMonthlyInputController(memberService *member.Service, monthlyService *monthly.Service) *MonthlyInputController {
-	return &MonthlyInputController{
+// NewMonthlyInputCoordinator creates a new coordinator for the Monthly Input workflow.
+func NewMonthlyInputCoordinator(memberService *member.Service, monthlyService *monthly.Service) *MonthlyInputCoordinator {
+	return &MonthlyInputCoordinator{
 		memberService:  memberService,
 		monthlyService: monthlyService,
 		currentMonth:   time.Now().Format("2006-01"),
@@ -49,8 +49,8 @@ func NewMonthlyInputController(memberService *member.Service, monthlyService *mo
 	}
 }
 
-// Load initializes the controller by loading all team members.
-func (c *MonthlyInputController) Load() error {
+// Load initializes the coordinator by loading all team members.
+func (c *MonthlyInputCoordinator) Load() error {
 	members, err := c.memberService.ListMembers()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (c *MonthlyInputController) Load() error {
 }
 
 // Validate checks if the form state is valid (all numeric fields parse correctly).
-func (c *MonthlyInputController) Validate() error {
+func (c *MonthlyInputCoordinator) Validate() error {
 	// Form validation: no rules at this layer.
 	// Individual field validation is done at the UI layer (parsePtr).
 	// Data persistence validation is done by the service layer.
@@ -69,7 +69,7 @@ func (c *MonthlyInputController) Validate() error {
 
 // SelectMember loads data for the given member (by list index).
 // Clears form fields before loading new member's data.
-func (c *MonthlyInputController) SelectMember(index int) error {
+func (c *MonthlyInputCoordinator) SelectMember(index int) error {
 	if index < 0 || index >= len(c.members) {
 		return NewValidationError(
 			ValidationErrorKindUnknown,
@@ -108,7 +108,7 @@ func (c *MonthlyInputController) SelectMember(index int) error {
 }
 
 // SetFormField updates a single form field value.
-func (c *MonthlyInputController) SetFormField(fieldName string, value *int) error {
+func (c *MonthlyInputCoordinator) SetFormField(fieldName string, value *int) error {
 	switch fieldName {
 	case "morale":
 		c.formState.Morale = value
@@ -141,12 +141,12 @@ func (c *MonthlyInputController) SetFormField(fieldName string, value *int) erro
 }
 
 // GetFormState returns a copy of the current form state.
-func (c *MonthlyInputController) GetFormState() MonthlyInputState {
+func (c *MonthlyInputCoordinator) GetFormState() MonthlyInputState {
 	return c.formState
 }
 
 // ClearForm resets all form fields to empty.
-func (c *MonthlyInputController) ClearForm() {
+func (c *MonthlyInputCoordinator) ClearForm() {
 	c.formState = MonthlyInputState{}
 }
 
@@ -159,7 +159,7 @@ func (c *MonthlyInputController) ClearForm() {
 // - No member is selected
 // - All form fields are empty (no data to save)
 // - Service layer fails (wrapped with user-friendly message)
-func (c *MonthlyInputController) SaveMember() error {
+func (c *MonthlyInputCoordinator) SaveMember() error {
 	if c.currentMember == nil {
 		return NewValidationError(
 			ValidationErrorKindNoMemberSelected,
@@ -246,7 +246,7 @@ func (c *MonthlyInputController) SaveMember() error {
 }
 
 // hasAnyData checks if at least one signal field has been set.
-func (c *MonthlyInputController) hasAnyData() bool {
+func (c *MonthlyInputCoordinator) hasAnyData() bool {
 	state := c.formState
 	return state.Morale != nil ||
 		state.Billability != nil ||
@@ -261,12 +261,12 @@ func (c *MonthlyInputController) hasAnyData() bool {
 }
 
 // GetMembers returns the list of all team members.
-func (c *MonthlyInputController) GetMembers() []domain.TeamMember {
+func (c *MonthlyInputCoordinator) GetMembers() []domain.TeamMember {
 	return c.members
 }
 
 // GetSelectedMemberID returns the ID of the currently selected member, or -1 if none selected.
-func (c *MonthlyInputController) GetSelectedMemberID() int64 {
+func (c *MonthlyInputCoordinator) GetSelectedMemberID() int64 {
 	if c.currentMember == nil {
 		return -1
 	}
@@ -274,12 +274,12 @@ func (c *MonthlyInputController) GetSelectedMemberID() int64 {
 }
 
 // GetSelectedIndex returns the index of the currently selected member in the members list.
-func (c *MonthlyInputController) GetSelectedIndex() int {
+func (c *MonthlyInputCoordinator) GetSelectedIndex() int {
 	return c.selectedIndex
 }
 
 // GetCurrentMonth returns the current month in YYYY-MM format.
-func (c *MonthlyInputController) GetCurrentMonth() string {
+func (c *MonthlyInputCoordinator) GetCurrentMonth() string {
 	return c.currentMonth
 }
 
@@ -287,7 +287,7 @@ func (c *MonthlyInputController) GetCurrentMonth() string {
 // Returns a ValidationError if:
 // - No member is selected (programming error)
 // - No entry found for previous month (user-facing)
-func (c *MonthlyInputController) CopyFromPreviousMonth() error {
+func (c *MonthlyInputCoordinator) CopyFromPreviousMonth() error {
 	if c.currentMember == nil {
 		return NewValidationError(
 			ValidationErrorKindUnknown,

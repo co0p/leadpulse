@@ -1,4 +1,4 @@
-package controllers
+package coordinator
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 	monthlysvc "leadpulse/service/monthly"
 )
 
-func TestMonthlyInputController_LoadMembers(t *testing.T) {
+func TestMonthlyInputCoordinator_LoadMembers(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -26,20 +26,20 @@ func TestMonthlyInputController_LoadMembers(t *testing.T) {
 	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	err := controller.Load()
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	err := coordinator.Load()
 
 	// Verify
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	members := controller.GetMembers()
+	members := coordinator.GetMembers()
 	if len(members) != 2 {
 		t.Errorf("expected 2 members, got %d", len(members))
 	}
 }
 
-func TestMonthlyInputController_SelectMember_LoadsData(t *testing.T) {
+func TestMonthlyInputCoordinator_SelectMember_LoadsData(t *testing.T) {
 	// Setup with Alice having pre-saved data
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -63,16 +63,16 @@ func TestMonthlyInputController_SelectMember_LoadsData(t *testing.T) {
 	)
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
-	err := controller.SelectMember(0)
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
+	err := coordinator.SelectMember(0)
 
 	// Verify
 	if err != nil {
 		t.Fatalf("SelectMember failed: %v", err)
 	}
 
-	state := controller.GetFormState()
+	state := coordinator.GetFormState()
 	if state.Morale == nil || *state.Morale != 4 {
 		t.Errorf("expected morale=4, got %v", state.Morale)
 	}
@@ -81,7 +81,7 @@ func TestMonthlyInputController_SelectMember_LoadsData(t *testing.T) {
 	}
 }
 
-func TestMonthlyInputController_SaveMember_Persists(t *testing.T) {
+func TestMonthlyInputCoordinator_SaveMember_Persists(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -96,18 +96,18 @@ func TestMonthlyInputController_SaveMember_Persists(t *testing.T) {
 	currentMonth := time.Now().Format("2006-01")
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
-	controller.SelectMember(0)
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
+	coordinator.SelectMember(0)
 
 	// Enter data
 	morale := 3
 	billability := 75
-	controller.SetFormField("morale", &morale)
-	controller.SetFormField("billability", &billability)
+	coordinator.SetFormField("morale", &morale)
+	coordinator.SetFormField("billability", &billability)
 
 	// Save
-	err := controller.SaveMember()
+	err := coordinator.SaveMember()
 	if err != nil {
 		t.Fatalf("SaveMember failed: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestMonthlyInputController_SaveMember_Persists(t *testing.T) {
 	}
 }
 
-func TestMonthlyInputController_SelectMember_ClearsForm(t *testing.T) {
+func TestMonthlyInputCoordinator_SelectMember_ClearsForm(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -142,25 +142,25 @@ func TestMonthlyInputController_SelectMember_ClearsForm(t *testing.T) {
 	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
-	controller.SelectMember(0)
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
+	coordinator.SelectMember(0)
 
 	// Set some form data
 	morale := 5
-	controller.SetFormField("morale", &morale)
+	coordinator.SetFormField("morale", &morale)
 
 	// Select different member
-	controller.SelectMember(1)
+	coordinator.SelectMember(1)
 
 	// Verify form was cleared
-	state := controller.GetFormState()
+	state := coordinator.GetFormState()
 	if state.Morale != nil {
 		t.Errorf("expected morale=nil after switching members, got %v", state.Morale)
 	}
 }
 
-func TestMonthlyInputController_CopyFromPreviousMonth(t *testing.T) {
+func TestMonthlyInputCoordinator_CopyFromPreviousMonth(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -184,16 +184,16 @@ func TestMonthlyInputController_CopyFromPreviousMonth(t *testing.T) {
 	)
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
-	controller.SelectMember(0)
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
+	coordinator.SelectMember(0)
 
-	err := controller.CopyFromPreviousMonth()
+	err := coordinator.CopyFromPreviousMonth()
 	if err != nil {
 		t.Fatalf("CopyFromPreviousMonth failed: %v", err)
 	}
 
-	state := controller.GetFormState()
+	state := coordinator.GetFormState()
 	if state.Morale == nil || *state.Morale != 3 {
 		t.Errorf("expected morale=3 after copy, got %v", state.Morale)
 	}
@@ -202,7 +202,7 @@ func TestMonthlyInputController_CopyFromPreviousMonth(t *testing.T) {
 	}
 }
 
-func TestMonthlyInputController_SaveMember_NoDataEntered(t *testing.T) {
+func TestMonthlyInputCoordinator_SaveMember_NoDataEntered(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -215,12 +215,12 @@ func TestMonthlyInputController_SaveMember_NoDataEntered(t *testing.T) {
 	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
-	controller.SelectMember(0)
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
+	coordinator.SelectMember(0)
 
 	// Try to save without entering any data
-	err := controller.SaveMember()
+	err := coordinator.SaveMember()
 
 	// Verify
 	if err == nil {
@@ -241,7 +241,7 @@ func TestMonthlyInputController_SaveMember_NoDataEntered(t *testing.T) {
 	}
 }
 
-func TestMonthlyInputController_SaveMember_NoMemberSelected(t *testing.T) {
+func TestMonthlyInputCoordinator_SaveMember_NoMemberSelected(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -249,12 +249,12 @@ func TestMonthlyInputController_SaveMember_NoMemberSelected(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 	monthlyService := monthlysvc.NewService(memberRepo, entryRepo)
 
-	// Test — create controller but don't select a member
-	controller := NewMonthlyInputController(memberService, monthlyService)
-	controller.Load()
+	// Test — create coordinator but don't select a member
+	coordinator := NewMonthlyInputCoordinator(memberService, monthlyService)
+	coordinator.Load()
 
 	// Try to save without selecting a member
-	err := controller.SaveMember()
+	err := coordinator.SaveMember()
 
 	// Verify
 	if err == nil {

@@ -1,4 +1,4 @@
-package controllers
+package coordinator
 
 // ValidationError represents a validation failure with a user-friendly message.
 // Low-level errors are caught and wrapped as ValidationError with clear messaging.

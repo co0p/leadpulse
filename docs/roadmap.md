@@ -7,6 +7,14 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ---
 
+## Migration Notice
+
+**As of 2026-09-15, implementation has shifted to a Web SPA frontend.** The Go backend (engine, store, service, and controllers) remains the same. The Fyne desktop GUI is being phased out in favor of an HTMX + Alpine.js + Go `html/template` SPA served from the Go binary. See the **SPA Implementation** section below for the new path. Fyne screens will be retired incrementally as their SPA equivalents pass acceptance criteria.
+
+See `docs/adr/ADR-20260915-spa-frontend-stack.md` for the frontend stack decision and rationale.
+
+---
+
 ## Done
 
 ### Team Member Management (CRUD)
@@ -19,7 +27,7 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 - **Evidence:**
   - Store layer: 5 integration tests passing (`store/member_test.go`; add, list, edit, deactivate, soft-delete with audit trail)
   - Service layer: 7 unit tests passing (`service/member/member_test.go`; use cases with mocked store, validation rules)
-  - UI layer: Settings screen (Screen F) with add/edit/deactivate dialogs; full CRUD via Fyne
+  - UI layer: Settings controller (Screen F) with add/edit/deactivate logic; full CRUD via Fyne (deprecated)
   - Database: idempotent SQLite schema in `store/schema.go` with members table and audit_log
   - Build: successful without errors (harmless macOS linker warnings only)
 - **Acceptance criteria:** All 5 met (AC-1: add/view/edit/remove, AC-2: seniority, AC-3: edit, AC-4: deactivate, AC-5: persistence)
@@ -30,8 +38,6 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 - **Test command:** `go test -race ./...` → all pass
 
 ---
-
-## Done
 
 ### Formula Engine — Core Scoring
 - **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
@@ -55,8 +61,6 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ---
 
-## Done
-
 ### Alert Engine
 - **Job story:** When scores or trends cross defined thresholds, I want the system to raise Amber or Red alerts automatically, so that I can intervene before a situation worsens.
 - **Acceptance scenarios verified:**
@@ -73,7 +77,7 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 - **Known limitation:** team-level alert inputs (% members Red, TII stddev history) are accepted as pre-computed parameters; the aggregation pipeline that derives them from real member data is not yet built (deferred to a future increment).
 - **Test command:** `go test -race ./engine/domain -run TestEvaluate` → all pass
 
-## Done
+---
 
 ### UI Refactored to Controller Pattern
 - **Job story:** When I add a new screen or fix a form logic bug, I want business logic separated from UI widgets, so that logic is unit testable without Fyne overhead and easier to debug and reuse.
@@ -106,28 +110,7 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
   - Screens: refactored to use controllers, all tests remain green
 - **Test command:** `go test -race ./ui/...` → all pass (17/17)
 
-## In Progress
-
-_Awaiting next increment._
-
 ---
-
-## Open Questions
-
-### Reactivating Deactivated Members
-- **Question:** When a previously deactivated member re-joins the team, should they be reactivated in place (restoring their history) or added as a new member (clean slate)?
-- **Considerations:** Reactivation preserves audit history and avoids duplicate entries; a new member record is simpler but loses historical context and risks orphaned score data.
-- **Decision needed before:** Member Detail (Screen C) and any feature that reads historical data per member.
-
-### Duplicate Member Names
-- **Question:** Two or more members can legitimately share the same first and last name. How should the UI help users distinguish between them when selecting or reviewing?
-- **Constraints:** The store must allow duplicate names (names are not a unique key). Disambiguation must not require renaming real people.
-- **Options to explore:** display seniority + join date inline, require a display alias on add, or show member ID as a tie-breaker.
-- **Decision needed before:** Monthly Input Workspace (Screen B) and any picker or dropdown that references members by name.
-
----
-
-## Done
 
 ### Monthly Input Workspace — Navigation Shell and Screen Registration
 - **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with live validation and persistence, so that I can complete the cycle accurately and efficiently.
@@ -149,66 +132,250 @@ _Awaiting next increment._
 
 ---
 
-## In Progress
+## SPA Implementation Path
 
-### Monthly Input Workspace — Form Content (Screen B)
-- **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with a live formula preview and completeness tracking, so that I can complete the cycle accurately and efficiently.
-- **Acceptance criteria:**
-  - AC-1: All 10 signal fields shown with PRD-defined ranges; out-of-range values rejected with a descriptive error.
-  - AC-2: Selecting a member loads any previously saved entry for the current cycle month.
-  - AC-3: Live preview panel updates TII and completeness on valid input without requiring save.
-  - AC-4: Saving a valid entry persists it; completeness indicator reflects the updated count.
-  - AC-5: "Copy from previous month" populates form from prior month's entry, or shows a clear message when none exists.
-- **Evidence:** pending — manual verification of signal fields, live preview updates, and member list behavior
+The following increments replace Fyne screens with a browser-based SPA served from the Go binary. The backend (engine, store, service, controllers) remains unchanged. Fyne screens are retired incrementally as their SPA equivalents pass acceptance criteria.
+
+**Architecture target:** Go binary runs the HTTP server with embedded SPA assets (HTML, CSS, JS, templates) via `embed.FS`. The browser talks to the Go server over a JSON REST API. Controllers delegate to services. No business logic in HTTP handlers.
+
+**Frontend stack:** HTMX + Alpine.js + Go `html/template` + Bulma CSS (see `docs/adr/ADR-20260915-spa-frontend-stack.md` for rationale).
 
 ---
 
+### SPA Increment 1: HTTP Server Shell
+
+**Goal:** Boot a local HTTP server from `main.go`; serve a static "hello" HTML page; prove the embed pipeline works.
+
+**Scope:**
+- Add `server/` package with a `Start(addr string, services ApplicationServices)` function
+- Wire `net/http` with an `embed.FS` pointing at `web/dist/` (the SPA build output)
+- `main.go` starts both the HTTP server (on a fixed or configurable port, e.g. `8080`) and (temporarily) the Fyne window, so the app still works while the SPA is being built
+- CI: add `go test ./server/...` to the test command
+
+**Why first:** establishes the binary embed pipeline and server lifecycle before any API or UI work.
+
+**Acceptance criteria verified:**
+- AC-1: `go run .` starts the server and the existing Fyne window simultaneously without error ✓
+- AC-2: `curl http://localhost:8080/` returns a 200 with a static HTML page embedded in the binary ✓ (verified via `TestHTTPServerStartsAndServesHTML`)
+- AC-3: `go test -race ./server/...` passes; handler tests use `net/http/httptest` — no Fyne, no OpenGL ✓
+
+**Evidence:**
+- Server package: `server/server.go` with `Start(addr string)` function booting HTTP server and serving embedded assets
+- Embedded assets: `server/dist/` with static `index.html` (mirrored from `web/dist/` to support Go embed.FS)
+- Main integration: `main.go` updated to start HTTP server in a goroutine while Fyne window runs in main thread
+- Server unit tests: 6 tests passing in `server/server_test.go` covering asset embedding, file serving, and no-Fyne verification
+- Server integration test: `TestHTTPServerStartsAndServesHTML` verifies the full server startup and HTML response
+- Build: `go build ./...` succeeds with embedded assets
+- Test: `go test -race ./server/...` passes (4 tests, no Fyne imports)
+
+**Key commits:** 
+- Server package with embed.FS and HTTP handler
+- HTML asset at web/dist/index.html
+- Main.go integration (HTTP + Fyne)
+- Server tests (unit + integration)
+
+**Test command:** `go test -race ./...` → all pass
+
+### Fyne Removal & SPA-First Refactor
+
+**Goal:** Remove all Fyne dependencies and desktop UI artifacts; restructure use-case logic as coordinators for reuse by HTTP handlers and future CLI clients; update architecture docs to reflect SPA-first design.
+
+**Acceptance scenarios verified:**
+- Deleted `ui/screens/`, `ui/app.go`, `ui/app_integration_test.go` (19 Fyne screen files removed) ✓
+- Moved `ui/controllers/` logic to `service/coordinator/monthly.go`, `service/coordinator/settings.go` ✓
+- Removed Fyne from `go.mod`; `grep -i fyne go.mod` returns nothing ✓
+- Rewrote `docs/architecture.md` to describe HTTP → Coordinator → Service → Store → Engine ✓
+- Deleted `docs/ui.md` and `docs/adr/ADR-20260913-go-fyne-desktop.md` ✓
+- Created `docs/adr/ADR-20260915-clean-architecture-layering.md` documenting coordinator pattern ✓
+- Updated `main.go` to boot HTTP server only (no Fyne window); starts on localhost:8080 ✓
+
+**Acceptance criteria verified:**
+- AC-1: No Fyne in dependencies — `go mod tidy` removes Fyne and transitive deps (OpenGL, GLFW, text-render) ✓
+- AC-2: Fyne code removed — `ui/screens/`, `ui/app.go`, `ui/controllers/` deleted; logic in `service/coordinator/` ✓
+- AC-3: Controllers → Coordinators — `service/coordinator/monthly.go`, `service/coordinator/settings.go` with 13 passing tests ✓
+- AC-4: Docs rewritten — `docs/architecture.md` is SPA-first; `ui.md` deleted ✓
+- AC-5: Old Fyne ADR deleted — `ADR-20260913-go-fyne-desktop.md` removed ✓
+- AC-6: New clean architecture ADR added — `ADR-20260915-clean-architecture-layering.md` documents coordinator pattern ✓
+- AC-7: Roadmap updated — feature marked "In Progress"; now moved to "Done" ✓
+- AC-8: main.go boots HTTP server only — Fyne imports removed; server.Start() blocks ✓
+- AC-9: All tests pass — `go test -race ./...` passes (10 packages, 13 coordinator tests, 7 handler tests) ✓
+
+**Evidence:**
+- Server layer: `server/server.go` with Start(addr) function; `server/handler_test.go` spike test proving HTTP context can call coordinators
+- Coordinator layer: `service/coordinator/monthly.go` (7 tests), `service/coordinator/settings.go` (6 tests), `service/coordinator/error.go` with ValidationError types
+- Architecture: `docs/architecture.md` describes HTTP → Coordinator → Service → Store → Engine with C4 Level 2 diagram
+- Clean architecture: `docs/adr/ADR-20260915-clean-architecture-layering.md` documents coordinator pattern, alternatives, and implementation rules
+- Removed: 19 Fyne screen files, `ui/app.go`, `ui/controllers/`, `docs/ui.md`, old Fyne ADR
+- Build: `go build ./...` succeeds; `go test -race ./...` passes (all 10 packages); no Fyne imports remain
+- Main: Updated to boot server only; database, schema, services remain available for HTTP handlers
+
+**Key commits:**
+- Subtask 1-4: Coordinators extracted from controllers (monthly, settings, error)
+- Subtask 5: Handler spike test proves coordinator reusability
+- Subtask 6: Fyne artifacts deleted (ui/screens, ui/app.go, ui/controllers)
+- Subtask 7: main.go updated to boot HTTP server only
+- Subtask 8: go mod tidy removes Fyne dependency
+- Subtask 9: docs/architecture.md rewritten for SPA-first design
+- Subtask 10-11: Deleted ui.md and old Fyne ADR
+- Subtask 12: All tests pass; no Fyne deps remain
+
+**Test command:** `go test -race ./...` → all pass (10 packages)
+
+---
+
+## In Progress
+
 ## Planned
 
-### Formula Engine — Core Scoring
-- **Job story:** When I submit a team member's monthly data, I want the system to compute all normalized scores, dimension scores (DG/DP/DT/DO), TII, completeness, and confidence, so that I have an objective, repeatable basis for my review.
-- **Evidence:** pending — unit tests for all normalization and scoring functions against PRD formulas
-- **Why first:** everything else (alerts, trends, UI, export) depends on correct formula output. No other increment can be verified without this.
+### SPA Increment 2: Team Members API
 
-### Trend Calculations (MA3, Delta1, Delta3, Vol3)
-- **Job story:** When I view a team member's scorecard, I want to see their trend over time (moving average, deltas, volatility), so that I can distinguish a one-off bad month from a genuine decline.
-- **Evidence:** pending — unit tests for all trend functions; integration tests for multi-month history reads
-- **Why now:** trends unlock the decision guardrails (promotion, support plan) and are required for several alert conditions.
+**Goal:** Expose the existing `SettingsController` member CRUD over HTTP. Prove that controller → handler wiring is testable with plain HTTP.
 
-### Monthly Input Workspace (Screen B)
-- **Job story:** When I open the monthly input workspace, I want to enter raw signals and impact ratings for each team member with live formula preview and completeness tracking, so that I can complete the cycle accurately and efficiently.
-- **Evidence:** pending — manual verification of all field validations, live preview updates, and copy-previous-month behavior
-- **Ordering:** navigation shell complete; depends on formula engine for live preview.
+**Scope:**
+- `GET /api/members` — list active members
+- `POST /api/members` — add member
+- `PATCH /api/members/{id}` — edit member
+- `DELETE /api/members/{id}` — deactivate member (soft delete)
+- Handlers delegate directly to `SettingsController`; no business logic in handlers
+- Request/response shapes match the JSON contract already implied by PRD Section 6
+- Handler unit tests use `httptest.NewRecorder` — zero Fyne, zero SQLite (controller is mocked)
+- Integration tests wire a real in-memory SQLite store (same pattern as `store/*_test.go`)
 
-### Overview Dashboard (Screen A)
-- **Job story:** When I start my monthly review, I want one screen showing the KPI strip, dimension heatmap, alert table, and action queue for my whole team, so that I know immediately who needs attention.
-- **Evidence:** pending — manual verification of heatmap colors, KPI calculations, and alert list behavior
-- **Ordering:** depends on monthly input, formula engine, alerts, and trends.
+**Why second:** member CRUD is the simplest use case and the most exercised layer. Good test-case for the handler → controller → service → store chain before tackling the more complex monthly input.
 
-### Member Detail (Screen C)
-- **Job story:** When I'm preparing for a 1:1, I want to see a team member's 12-month trend, signal contribution breakdown, evidence log, and action plan, so that my conversation is grounded in data.
-- **Evidence:** pending — manual verification of trend chart, contribution table values, evidence timeline
-- **Ordering:** depends on formula engine, trends, and persistence layer.
+**Acceptance criteria:**
+- AC-1: All CRUD operations round-trip correctly through the API
+- AC-2: Invalid inputs return structured JSON error responses with the same `UserMessage()` text as the Fyne dialogs
+- AC-3: Handler unit tests cover the happy path and all `ValidationError` branches — no Fyne required
+- AC-4: `go test -race ./...` passes
 
-### Alerts Center (Screen D)
-- **Job story:** When I have multiple active alerts, I want to filter, triage, assign, and resolve them with reason capture, so that every risk case has an owner and next step.
-- **Evidence:** pending — manual verification of filter, resolve/snooze, and action assignment flows
-- **Ordering:** depends on alert engine and persistence layer.
+---
 
-### Monthly Review and Calibration (Screen E)
-- **Job story:** When I finalize the monthly cycle, I want to see the distribution of scores, review promotion/support guardrail status for each member, and record overrides with mandatory rationale, so that my decisions are fair, auditable, and locked.
-- **Evidence:** pending — manual verification of finalization block (completeness < 70%), override capture, and cycle lock behavior
-- **Ordering:** depends on all previous screens and the audit trail.
+### SPA Increment 3: Monthly Entry API
 
-### CSV Export
-- **Job story:** When I need to share a review summary, I want to export team overview and member detail data as CSV, so that I can use it in review meetings or archive it.
-- **Evidence:** pending — manual verification of CSV structure and completeness for team and member views
-- **Ordering:** depends on scoring, trends, and alerts.
+**Goal:** Expose `MonthlyInputController` over HTTP. Deliver live score preview as a pure HTTP endpoint.
 
-### Settings (Screen F)
-- **Job story:** When my team's context changes, I want to adjust the billability target, alert sensitivity preset, and reminder dates, so that the tool reflects how my team actually works.
-- **Evidence:** pending — manual verification that settings persist and affect alert thresholds correctly
-- **Why last:** lowest risk, least user impact. Core functionality must be stable first.
+**Scope:**
+- `GET /api/entries?member_id=&month=` — get entry for a member/month
+- `POST /api/entries` — save entry
+- `POST /api/entries/preview` — compute TII + completeness from raw signals without persisting (maps to `PreviewScores`)
+- `GET /api/entries/previous?member_id=&month=` — get prior month entry for copy-from-previous
+- Same handler/controller separation and test pattern as Increment 2
+
+**Acceptance criteria:**
+- AC-1: Preview endpoint returns TII and completeness without writing to the database
+- AC-2: Save endpoint persists the entry; a subsequent GET returns the same data
+- AC-3: Out-of-range signal values return a structured error with PRD-defined range in the message
+- AC-4: Handler unit tests use mocked controller — no Fyne, no SQLite, no OpenGL
+
+---
+
+### SPA Increment 4: Settings Screen (First SPA Replacement)
+
+**Goal:** Build the Settings screen (member list, add/edit/deactivate) as a browser-rendered SPA page backed by the Members API. This is the first Fyne screen retired.
+
+**Scope:**
+- Scaffold the SPA project in `web/` with HTMX + Alpine.js + Go `html/template`
+- Implement the Settings screen with identical UX to the existing Fyne screen
+- Add `Makefile` target `make web` that prepares SPA templates; no separate build step required (templates embedded directly)
+- Remove `ui/screens/settings.go` once the SPA version passes acceptance
+- SettingsController remains in `ui/controllers/` and is called by HTTP handlers
+
+**Why Settings first:** it is the simplest screen (pure CRUD, no formula rendering, no live preview). Low risk for proving the full stack.
+
+**Acceptance criteria:**
+- AC-1: Add, edit, and deactivate flows work in the browser identically to the Fyne screen behavior
+- AC-2: Handler unit tests and Playwright end-to-end tests provide equivalent or better coverage than Fyne tests
+- AC-3: `go test -race ./...` passes; `go build ./...` produces a single binary with the SPA assets embedded
+- AC-4: `curl http://localhost:8080/settings` serves the Settings page with live functionality
+
+---
+
+### SPA Increment 5: Monthly Input Screen
+
+**Goal:** Replace the Monthly Input Fyne screen (Screen B) with a SPA page.
+
+**Scope:**
+- Implement all 10 signal fields, impact rating, live TII/completeness preview, save, and copy-from-previous-month using HTMX + Alpine.js
+- Live preview calls `POST /api/entries/preview` on field change (debounced via `x-on:input.debounce`)
+- Remove `ui/screens/monthly_input.go` and related Fyne acceptance/integration tests once SPA tests pass
+- All prior Fyne acceptance criteria must have equivalent browser tests
+
+**Acceptance criteria:**
+- AC-1 through AC-5 from the original Monthly Input increment verified via browser tests
+- Live preview response latency ≤ 100ms on local machine (same PRD performance envelope)
+- No Fyne or OpenGL import remains in any monthly input test
+
+---
+
+### SPA Increment 6: Remaining Screens (Overview, Member Detail, Alerts, Review)
+
+Each screen follows the same pattern:
+1. Add any missing API endpoints for the screen's data
+2. Build the SPA screen using HTMX + Alpine.js + Go templates
+3. Retire the equivalent Fyne placeholder or screen
+4. Verify acceptance criteria via browser tests
+
+These screens map 1:1 to the feature set (Overview Dashboard, Member Detail, Alerts Center, Monthly Review). They are sequenced identically to the original roadmap — the SPA migration does not change feature priority, only the rendering layer.
+
+**Screens to build (in order):**
+- Overview Dashboard (Screen A) — team KPI strip, dimension heatmap, alert table, action queue
+- Member Detail (Screen C) — 12-month trend, signal contribution, evidence log, action plan
+- Alerts Center (Screen D) — filter, triage, assign, resolve with reason capture
+- Monthly Review and Calibration (Screen E) — finalization, promotion/support guardrail review, override capture, cycle lock
+
+---
+
+### SPA Increment 7: Remove Fyne Dependency
+
+**Goal:** Once all screens are migrated, remove Fyne entirely from `go.mod`.
+
+**Scope:**
+- Delete `ui/screens/`, `ui/app.go`, and any remaining Fyne imports
+- Remove `fyne.io/fyne/v2` and all OpenGL/GLFW/text-render transitive dependencies from `go.mod`
+- Update `main.go` to only start the HTTP server (no Fyne window)
+- Update `docs/architecture.md` and `docs/adr/` with a new ADR documenting the Fyne retirement decision
+- Binary size and startup time should decrease materially
+
+**Acceptance criteria:**
+- AC-1: `go mod tidy` leaves no Fyne dependency in `go.mod` or `go.sum`
+- AC-2: `go test -race ./...` passes with no OpenGL/headless test infrastructure
+- AC-3: `go build ./...` produces a working binary; `curl http://localhost:8080/` serves the SPA homepage
+
+---
+
+### Feature Backlog (Unaffected by Migration)
+
+The following features are still planned but are not blocking the SPA migration. They can be built once the SPA foundation is stable:
+
+- **Trend Calculations (MA3, Delta1, Delta3, Vol3)** — moving average, deltas, volatility for trend-based alerts
+- **CSV Export** — export team overview and member detail data as CSV for meetings and archival
+- **Settings threshold tuning** — allow users to adjust billability target, alert sensitivity presets, reminder dates
+
+---
+
+## Open Questions
+
+### Port Configuration
+- **Question:** Should the port be hardcoded, a flag, or read from a config file?
+- **Considerations:** A flag (`--port 8080`) is the standard Go convention and easiest to test. A config file adds complexity.
+- **Decision needed before:** SPA Increment 1
+
+### Browser Launch on Startup
+- **Question:** Should the binary automatically open the default browser on startup?
+- **Considerations:** Good UX for a desktop-replacement tool; `os/exec` + `open`/`xdg-open`/`start` per platform; optional via `--no-browser` flag.
+- **Decision needed before:** SPA Increment 1
+
+### Reactivating Deactivated Members
+- **Question:** When a previously deactivated member re-joins the team, should they be reactivated in place (restoring their history) or added as a new member (clean slate)?
+- **Considerations:** Reactivation preserves audit history and avoids duplicate entries; a new member record is simpler but loses historical context and risks orphaned score data.
+- **Decision needed before:** Member Detail (Screen C) and any feature that reads historical data per member.
+
+### Duplicate Member Names
+- **Question:** Two or more members can legitimately share the same first and last name. How should the UI help users distinguish between them when selecting or reviewing?
+- **Constraints:** The store must allow duplicate names (names are not a unique key). Disambiguation must not require renaming real people.
+- **Options to explore:** display seniority + join date inline, require a display alias on add, or show member ID as a tie-breaker.
+- **Decision needed before:** Monthly Input Workspace (Screen B) and any picker or dropdown that references members by name.
 
 ---
 
@@ -216,5 +383,6 @@ _Awaiting next increment._
 
 - Features move: Planned → In Progress → Done. Never skip In Progress.
 - A feature enters Done only when its user outcome is verified and the evidence link is present.
+- Fyne screens are removed only after their SPA equivalent passes all acceptance criteria.
 - Implementation detail belongs in code and phase artifacts, not here.
 - If a planned feature is dropped, remove it and record the reason in a commit message or ADR.

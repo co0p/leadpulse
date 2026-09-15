@@ -8,11 +8,10 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"fyne.io/fyne/v2/app"
+	"leadpulse/server"
 	"leadpulse/service/member"
 	"leadpulse/service/monthly"
 	"leadpulse/store"
-	"leadpulse/ui"
 )
 
 func main() {
@@ -41,18 +40,15 @@ func main() {
 	memberService := member.NewService(memberRepo, entryRepo)
 	monthlyService := monthly.NewService(memberRepo, entryRepo)
 
-	// Create service container
-	services := &ui.ApplicationServices{
-		MemberService:  memberService,
-		MonthlyService: monthlyService,
+	// Start HTTP server with coordinators available for HTTP handlers
+	// (Coordinators can be injected into handlers via dependency injection)
+	_ = memberService  // Available for HTTP handlers
+	_ = monthlyService // Available for HTTP handlers
+
+	// Boot HTTP server (blocks indefinitely)
+	if err := server.Start("localhost:8080"); err != nil {
+		log.Fatalf("HTTP server error: %v", err)
 	}
-
-	// Create Fyne app
-	fyneApp := app.New()
-
-	// Create and show the main window (UI accepts services only)
-	window := ui.NewMainWindow(fyneApp, services)
-	window.ShowAndRun()
 }
 
 // getDatabasePath returns the path to the SQLite database file.

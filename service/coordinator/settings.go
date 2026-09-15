@@ -1,28 +1,28 @@
-package controllers
+package coordinator
 
 import (
 	"leadpulse/engine/domain"
 	membersvc "leadpulse/service/member"
 )
 
-// SettingsController owns all business logic for the Settings screen.
+// SettingsCoordinator owns all business logic for the Settings workflow.
 // It manages member list state and member CRUD operations.
-// Controllers have zero Fyne dependencies and are fully unit testable.
-type SettingsController struct {
+// Coordinators have zero UI dependencies and are fully unit testable.
+type SettingsCoordinator struct {
 	memberService *membersvc.Service
 	members       []domain.TeamMember
 }
 
-// NewSettingsController creates a new controller for the Settings screen.
-func NewSettingsController(memberService *membersvc.Service) *SettingsController {
-	return &SettingsController{
+// NewSettingsCoordinator creates a new coordinator for the Settings workflow.
+func NewSettingsCoordinator(memberService *membersvc.Service) *SettingsCoordinator {
+	return &SettingsCoordinator{
 		memberService: memberService,
 		members:       []domain.TeamMember{},
 	}
 }
 
-// Load initializes the controller by loading all active team members.
-func (c *SettingsController) Load() error {
+// Load initializes the coordinator by loading all active team members.
+func (c *SettingsCoordinator) Load() error {
 	members, err := c.memberService.ListMembers()
 	if err != nil {
 		return err
@@ -32,13 +32,13 @@ func (c *SettingsController) Load() error {
 }
 
 // Validate checks if the current state is valid.
-func (c *SettingsController) Validate() error {
+func (c *SettingsCoordinator) Validate() error {
 	// Settings validation: no rules at this layer.
 	return nil
 }
 
 // GetMembers returns the current list of members.
-func (c *SettingsController) GetMembers() []domain.TeamMember {
+func (c *SettingsCoordinator) GetMembers() []domain.TeamMember {
 	return c.members
 }
 
@@ -48,7 +48,7 @@ func (c *SettingsController) GetMembers() []domain.TeamMember {
 // Returns a ValidationError if:
 // - firstName or lastName is empty
 // - Member creation fails (wrapped with user-friendly message)
-func (c *SettingsController) AddMember(firstName, lastName string, seniority domain.Seniority) error {
+func (c *SettingsCoordinator) AddMember(firstName, lastName string, seniority domain.Seniority) error {
 	if firstName == "" || lastName == "" {
 		return NewValidationError(
 			ValidationErrorKindInvalidField,
@@ -85,7 +85,7 @@ func (c *SettingsController) AddMember(firstName, lastName string, seniority dom
 // Returns a ValidationError if:
 // - firstName or lastName is empty
 // - Member update fails (wrapped with user-friendly message)
-func (c *SettingsController) EditMember(memberID int64, firstName, lastName string, seniority domain.Seniority) error {
+func (c *SettingsCoordinator) EditMember(memberID int64, firstName, lastName string, seniority domain.Seniority) error {
 	if firstName == "" || lastName == "" {
 		return NewValidationError(
 			ValidationErrorKindInvalidField,
@@ -120,7 +120,7 @@ func (c *SettingsController) EditMember(memberID int64, firstName, lastName stri
 // After success, the member list is reloaded.
 //
 // Returns a ValidationError if member deactivation fails (wrapped with user-friendly message).
-func (c *SettingsController) DeactivateMember(memberID int64) error {
+func (c *SettingsCoordinator) DeactivateMember(memberID int64) error {
 	err := c.memberService.DeactivateMember(memberID)
 	if err != nil {
 		// Wrap service layer errors
@@ -136,7 +136,7 @@ func (c *SettingsController) DeactivateMember(memberID int64) error {
 }
 
 // GetMemberByID finds a member in the current list by ID.
-func (c *SettingsController) GetMemberByID(memberID int64) *domain.TeamMember {
+func (c *SettingsCoordinator) GetMemberByID(memberID int64) *domain.TeamMember {
 	for i := range c.members {
 		if int64(c.members[i].ID()) == memberID {
 			return &c.members[i]
@@ -146,6 +146,6 @@ func (c *SettingsController) GetMemberByID(memberID int64) *domain.TeamMember {
 }
 
 // GetMemberCount returns the number of members in the current list.
-func (c *SettingsController) GetMemberCount() int {
+func (c *SettingsCoordinator) GetMemberCount() int {
 	return len(c.members)
 }

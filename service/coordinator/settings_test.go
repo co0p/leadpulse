@@ -1,4 +1,4 @@
-package controllers
+package coordinator
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	membersvc "leadpulse/service/member"
 )
 
-func TestSettingsController_LoadMembers(t *testing.T) {
+func TestSettingsCoordinator_LoadMembers(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -23,19 +23,19 @@ func TestSettingsController_LoadMembers(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	err := controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	err := coordinator.Load()
 
 	// Verify
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
-	if controller.GetMemberCount() != 2 {
-		t.Errorf("expected 2 members, got %d", controller.GetMemberCount())
+	if coordinator.GetMemberCount() != 2 {
+		t.Errorf("expected 2 members, got %d", coordinator.GetMemberCount())
 	}
 }
 
-func TestSettingsController_GetMemberByID(t *testing.T) {
+func TestSettingsCoordinator_GetMemberByID(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -47,16 +47,16 @@ func TestSettingsController_GetMemberByID(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
-	found := controller.GetMemberByID(42)
+	found := coordinator.GetMemberByID(42)
 	if found == nil {
 		t.Fatal("member not found")
 	}
 }
 
-func TestSettingsController_AddMember(t *testing.T) {
+func TestSettingsCoordinator_AddMember(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -64,25 +64,25 @@ func TestSettingsController_AddMember(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
-	if controller.GetMemberCount() != 0 {
-		t.Errorf("expected 0 initial members, got %d", controller.GetMemberCount())
+	if coordinator.GetMemberCount() != 0 {
+		t.Errorf("expected 0 initial members, got %d", coordinator.GetMemberCount())
 	}
 
-	err := controller.AddMember("Diana", "Manager", domain.SeniorityMid)
+	err := coordinator.AddMember("Diana", "Manager", domain.SeniorityMid)
 	if err != nil {
 		t.Fatalf("AddMember failed: %v", err)
 	}
 
 	// Verify
-	if controller.GetMemberCount() != 1 {
-		t.Errorf("expected 1 member after add, got %d", controller.GetMemberCount())
+	if coordinator.GetMemberCount() != 1 {
+		t.Errorf("expected 1 member after add, got %d", coordinator.GetMemberCount())
 	}
 }
 
-func TestSettingsController_EditMember(t *testing.T) {
+func TestSettingsCoordinator_EditMember(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -94,16 +94,16 @@ func TestSettingsController_EditMember(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
-	err := controller.EditMember(1, "Eve", "SeniorEngineer", domain.SenioritySenior)
+	err := coordinator.EditMember(1, "Eve", "SeniorEngineer", domain.SenioritySenior)
 	if err != nil {
 		t.Fatalf("EditMember failed: %v", err)
 	}
 
 	// Verify member was updated (check seniority changed)
-	found := controller.GetMemberByID(1)
+	found := coordinator.GetMemberByID(1)
 	if found == nil {
 		t.Fatal("member not found after edit")
 	}
@@ -112,7 +112,7 @@ func TestSettingsController_EditMember(t *testing.T) {
 	}
 }
 
-func TestSettingsController_DeactivateMember(t *testing.T) {
+func TestSettingsCoordinator_DeactivateMember(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -124,25 +124,25 @@ func TestSettingsController_DeactivateMember(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
-	if controller.GetMemberCount() != 1 {
-		t.Errorf("expected 1 member initially, got %d", controller.GetMemberCount())
+	if coordinator.GetMemberCount() != 1 {
+		t.Errorf("expected 1 member initially, got %d", coordinator.GetMemberCount())
 	}
 
-	err := controller.DeactivateMember(1)
+	err := coordinator.DeactivateMember(1)
 	if err != nil {
 		t.Fatalf("DeactivateMember failed: %v", err)
 	}
 
 	// Verify member was deactivated (removed from active list)
-	if controller.GetMemberCount() != 0 {
-		t.Errorf("expected 0 members after deactivate, got %d", controller.GetMemberCount())
+	if coordinator.GetMemberCount() != 0 {
+		t.Errorf("expected 0 members after deactivate, got %d", coordinator.GetMemberCount())
 	}
 }
 
-func TestSettingsController_AddMember_EmptyName(t *testing.T) {
+func TestSettingsCoordinator_AddMember_EmptyName(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -150,11 +150,11 @@ func TestSettingsController_AddMember_EmptyName(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
 	// Try to add member with empty first name
-	err := controller.AddMember("", "Engineer", domain.SeniorityMid)
+	err := coordinator.AddMember("", "Engineer", domain.SeniorityMid)
 
 	// Verify validation error
 	if err == nil {
@@ -171,7 +171,7 @@ func TestSettingsController_AddMember_EmptyName(t *testing.T) {
 	}
 }
 
-func TestSettingsController_EditMember_EmptyName(t *testing.T) {
+func TestSettingsCoordinator_EditMember_EmptyName(t *testing.T) {
 	// Setup
 	memberRepo := domain.NewInMemoryTeamMemberRepository()
 	entryRepo := domain.NewInMemoryMonthlyEntryRepository()
@@ -183,11 +183,11 @@ func TestSettingsController_EditMember_EmptyName(t *testing.T) {
 	memberService := membersvc.NewService(memberRepo, entryRepo)
 
 	// Test
-	controller := NewSettingsController(memberService)
-	controller.Load()
+	coordinator := NewSettingsCoordinator(memberService)
+	coordinator.Load()
 
 	// Try to edit with empty last name
-	err := controller.EditMember(1, "Alice", "", domain.SeniorityMid)
+	err := coordinator.EditMember(1, "Alice", "", domain.SeniorityMid)
 
 	// Verify validation error
 	if err == nil {
