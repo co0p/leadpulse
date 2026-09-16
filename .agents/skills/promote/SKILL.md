@@ -7,7 +7,7 @@ description: "Use after implementation.md is marked complete. Reviews all .agent
 
 ## One Responsibility
 
-Merge durable outcomes from the `.agent/` working set into permanent project artifacts before the branch merges.
+Promote durable outcomes to permanent project artifacts, run a final tidy pass on the branch, then land the increment — either as a squash-merge to `main` or by pushing the branch for a pull request on the project's hosting platform. The user chooses; the skill executes.
 
 ---
 
@@ -93,6 +93,9 @@ Do NOT delete .agent/ files until all promotions are written and confirmed.
 Present each candidate separately with destination path and rationale.
 Do NOT leave permanent docs stale when the implementation changed architecture, domain language, or performance-critical behavior.
 Do NOT close promotion while any required permanent documentation baseline item is missing or inadequate. If runtime structure, domain vocabulary, and UI decisions are unchanged, still verify that `docs/architecture.md`, `docs/domain.md`, and `docs/ui.md` (when applicable) exist and satisfy their requirements.
+Do NOT squash-merge until the final tidy pass is complete and all tests are green.
+Do NOT write the squash commit message without reading implementation.md to list actual delivered subtasks.
+Do NOT ask the user to choose a merge strategy before the final tidy pass and doc promotions are complete.
 </HARD-GATE>
 
 ---
@@ -104,7 +107,49 @@ Do NOT close promotion while any required permanent documentation baseline item 
 3. **Conversation: Propose promotions** — identify candidates and state what each is, its destination, and why it is durable. Iterate until the user says to proceed.
 4. **On approval** — write each approved permanent artifact.
 5. **Re-audit the baseline** — confirm every required document exists and satisfies its content requirement before cleanup.
-6. **Clean up** — archive or delete `.agent/` files for this cycle.
+6. **Final tidy pass** — on the increment branch, run the full test suite, then ask: is there any structural cleanup (rename, extract, inline) that would make the branch cleaner before it lands? Apply only behavior-preserving changes. Commit each as `tidy: <what>`. Tests must stay green throughout.
+7. **Ask the user how to land the increment** — present the two options and wait for an explicit choice:
+
+   > The branch is clean and all docs are promoted. How would you like to land this increment?
+   > - **A) Squash-merge to main** — collapses all branch commits into one summary commit on `main`. Keeps `main` history linear and scannable.
+   > - **B) Push branch and open a PR** — pushes the branch as-is so a pull request can be reviewed and merged on GitHub / GitLab / Bitbucket or equivalent. Use this when the project requires peer review, CI gates on the hosting platform, or a merge strategy other than squash.
+
+8. **Execute the chosen strategy:**
+
+   **Option A — Squash-merge to main:**
+   Draft the commit message from `implementation.md`, then run:
+   ```
+   git checkout main && git merge --squash <branch> && git commit
+   ```
+   Commit message structure:
+   ```
+   feat: <one-sentence goal from increment.md>
+
+   Increment: <branch name>
+   Acceptance criteria:
+   - AC-1: <criterion>
+   - AC-2: <criterion>
+
+   Subtasks delivered:
+   - tidy: <what>
+   - feat: <what>
+   - refactor: <what>
+   [list each subtask commit message from implementation.md]
+
+   Evidence: <test suite result — N passing, 0 failing>
+   ```
+
+   **Option B — Push branch for PR:**
+   Push the branch and provide the URL or command to open a pull request:
+   ```
+   git push -u origin <branch>
+   ```
+   Then open a PR with:
+   - **Title:** `<one-sentence goal from increment.md>`
+   - **Body:** acceptance criteria, subtasks delivered (from `implementation.md`), and evidence — same content as the squash commit message body above.
+   The PR description is the durable record; do not summarise it shorter than the squash message would have been.
+
+9. **Clean up** — archive or delete `.agent/` files for this cycle. For Option A, optionally delete the increment branch after confirming the squash commit landed. For Option B, leave the branch until the PR is merged.
 
 ---
 
@@ -137,13 +182,18 @@ Do NOT close promotion while any required permanent documentation baseline item 
 - [ ] Final baseline audit passes: glossary, C4 architecture view, and UI decisions (when applicable) are present and current
 - [ ] Architecture, domain language, testing guidance, and performance documentation either updated or explicitly marked unchanged
 - [ ] Acceptance scenarios, if present, have results recorded; advisory failures or unavailable scenarios are documented without blocking by default
+- [ ] Final tidy pass run on the increment branch: behavior-preserving cleanup committed as `tidy: <what>`, tests green
+- [ ] User asked to choose landing strategy (squash-merge to main or push branch for PR)
+- [ ] **Option A:** squash commit message drafted from `implementation.md`; `git merge --squash <branch>` run and commit pushed to `main`
+- [ ] **Option B:** branch pushed; PR opened with title and body matching squash commit message structure
 - [ ] `.agent/` files cleaned up
+- [ ] Increment branch deleted (Option A) or left open until PR is merged (Option B)
 
 ---
 
 ## Handoff
 
-Terminal artifacts: permanent docs updated, `.agent/` clean
+Terminal artifacts: permanent docs updated, increment landed (squash commit on `main` or branch pushed for PR), `.agent/` clean
 Cycle complete. Next action: `4dc-increment` for the next cycle — load `skills/increment/SKILL.md`
 
 ---

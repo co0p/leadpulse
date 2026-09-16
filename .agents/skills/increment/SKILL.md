@@ -34,6 +34,7 @@ Define one small, outcome-focused increment with measurable acceptance criteria 
 `.agent/increment.md` containing:
 - **Use case**: job story in the form _"When [situation], I want to [action], so that [outcome]."_ Written or confirmed by the customer before criteria are defined.
 - **Goal**: one sentence — the user-observable outcome (distilled from the use case)
+- **Branch**: the git branch name for this increment, in the form `increment/<slug>` (e.g. `increment/token-refresh`)
 - **Acceptance criteria**: 2–5 binary, verifiable conditions derived from the use case; each criterion names observable proof rather than an implementation mechanism
 - **Acceptance-test intent**: optional user-journey scenarios for larger increments; these clarify end-to-end evidence but are not a required artifact or completion gate unless `CONSTITUTION.md` says so
 - **Out of scope**: explicit exclusions that prevent scope creep
@@ -43,6 +44,7 @@ Define one small, outcome-focused increment with measurable acceptance criteria 
 Required `.agent/increment.md` headings:
 - `## Use Case`
 - `## Goal`
+- `## Branch`
 - `## Acceptance Criteria`
 - `## Acceptance-Test Intent` (optional)
 - `## Out Of Scope`
@@ -87,8 +89,8 @@ Acceptance tests are optional. Do not make an increment larger just to add them.
 ## Process
 
 1. **Read context** — `CONSTITUTION.md`, `docs/roadmap.md`, and any prior `.agent/` files from the last cycle.
-2. **Conversation: Elicit and propose the increment** — shape the job story, derive binary criteria, propose the scope, and iterate until the user confirms it.
-3. **On approval** — write `.agent/increment.md` and move the feature to Partial in `docs/roadmap.md`.
+2. **Conversation: Elicit and propose the increment** — shape the job story, derive binary criteria, propose the scope, and iterate until the user confirms it. Derive the branch name from the increment goal slug.
+3. **On approval** — write `.agent/increment.md`, move the feature to Partial in `docs/roadmap.md`, and create the branch: `git checkout -b increment/<slug>`.
 
 ---
 
@@ -100,10 +102,12 @@ Acceptance tests are optional. Do not make an increment larger just to add them.
 - [ ] Acceptance criteria are binary and verifiable
 - [ ] Acceptance-test intent recorded when the increment is large enough to benefit from an end-to-end scenario (optional)
 - [ ] Out-of-scope list is non-empty
+- [ ] Branch name derived (`increment/<slug>`)
 - [ ] Roadmap entry (feature name + job story) identified
 - [ ] User approval received
 - [ ] `.agent/increment.md` written
 - [ ] `docs/roadmap.md` updated: feature moved to Partial
+- [ ] Branch created: `git checkout -b increment/<slug>`
 
 ---
 

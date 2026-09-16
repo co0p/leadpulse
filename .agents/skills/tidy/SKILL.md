@@ -89,24 +89,28 @@ Commit as `tidy: <what changed>` — never `feat:` or `fix:`.
 ## Process
 
 1. **Read the current subtask** from `.agent/implementation.md` — the first subtask with `type: tidy` and `state: pending`.
-2. **Run the tests.** Confirm they are green before you start. If they are not green, stop — fix the baseline first.
+2. **Mark the todo item `in_progress`** for this subtask.
+3. **Run the tests.** Confirm they are green before you start. If they are not green, stop — fix the baseline first.
 3. **Make the structural change** — rename, extract, reorganise, inline. One move, one purpose: prepare for the behavior change that follows.
 4. **Run the tests again.** Confirm they stay green. If any test changed behavior, the change is not tidy — revert and record the mislabel in `learnings.md`.
 5. **Record evidence** in `implementation.md`: `state: complete`, test output confirming green.
 6. **Commit** as `tidy: <what changed>`.
-7. **Append learnings** if design or architecture implications emerged.
-8. **Advance** to the next subtask — the orchestrator detects the type and state and loads the right skill.
+7. **Mark the todo item `completed`.**
+8. **Append learnings** if design or architecture implications emerged.
+9. **Advance** to the next subtask — the orchestrator detects the type and state and loads the right skill.
 
 ---
 
 ## Checklist
 
 - [ ] Current subtask read (`type: tidy`, `state: pending`)
+- [ ] Todo item for this subtask marked `in_progress`
 - [ ] Tests green before starting
 - [ ] One structural change made (rename, extract, reorganise, inline)
 - [ ] Tests green after — no behavior change
 - [ ] `implementation.md` updated: `state: complete`, evidence
 - [ ] Committed as `tidy: <what changed>`
+- [ ] Todo item marked `completed`
 - [ ] Learnings appended if implications emerged
 
 ---

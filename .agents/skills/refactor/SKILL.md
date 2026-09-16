@@ -99,7 +99,7 @@ Commit as `refactor: <what changed>` — never `feat:` or `fix:`. If no refactor
 7. **Record evidence** in `implementation.md`: set the active test case `state: complete`, with test output confirming green and what was refactored.
 8. **Commit** as `refactor: <what changed>`.
 9. **Append learnings** if design decisions or promote candidates emerged.
-10. **Advance within the subtask:** if a pending test case remains, set it as `active_test` with `state: pending`; `tdd-red` starts its cycle. If all cases are complete, set the behavior subtask `state: complete` and advance to the next subtask.
+10. **Advance within the subtask:** if a pending test case remains, set it as `active_test` with `state: pending`; `tdd-red` starts its cycle. If all cases are complete, set the behavior subtask `state: complete`, **mark the todo item `completed`**, and advance to the next subtask.
 
 ### When all subtasks are complete
 
@@ -118,7 +118,7 @@ Commit as `refactor: <what changed>` — never `feat:` or `fix:`. If no refactor
 - [ ] If refactored: tests stayed green after each move
 - [ ] If no refactoring needed: decision recorded
 - [ ] Active test case marked `state: complete` with evidence
-- [ ] Next pending test case activated, or behavior subtask marked complete when all cases are complete
+- [ ] Next pending test case activated, or behavior subtask marked complete and todo item marked `completed` when all cases are complete
 - [ ] Committed as `refactor: <what changed>` (or commit skipped with recorded reason)
 - [ ] Learnings appended if decisions or candidates emerged
 

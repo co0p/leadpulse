@@ -87,7 +87,8 @@ Do NOT proceed to `4dc-tdd-green` if the test fails for the wrong reason (syntax
 ## Process
 
 1. **Read the current subtask** from `.agent/implementation.md` — the first `[behavior]` subtask with an unfinished `tests` list. Select its `active_test`, or the first test case with `state: pending`.
-2. **Read the testing strategy** in `CONSTITUTION.md` and `docs/testing.md` — choose the cheapest test depth that gives sufficient confidence at this boundary.
+2. **Mark the todo item `in_progress`** for this subtask (if not already marked from a prior test case in the same subtask).
+3. **Read the testing strategy** in `CONSTITUTION.md` and `docs/testing.md` — choose the cheapest test depth that gives sufficient confidence at this boundary.
 3. **Write one test case** for `active_test` that specifies one example of the behavior. Name it in domain language so the test reads as a specification. Do not implement or activate the other cases yet.
 4. **Run the test.** Confirm it fails. Read the failure message — it must fail because the behavior does not exist, not because of a setup or import error.
 5. **Record evidence** in `.agent/implementation.md`:
@@ -103,6 +104,7 @@ If the test reveals the subtask is too large or the interface is unclear, record
 ## Checklist
 
 - [ ] Current `[behavior]` subtask and `active_test` read from `implementation.md`
+- [ ] Todo item for this subtask marked `in_progress`
 - [ ] Testing strategy consulted (depth, naming, isolation)
 - [ ] One `active_test` written that specifies one example of the behavior
 - [ ] Test run and confirmed failing for the right reason

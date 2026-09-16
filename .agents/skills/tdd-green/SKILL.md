@@ -102,11 +102,13 @@ Commit behavior work as `feat: <what changed>` or `fix: <what changed>`. Never `
 
 ### For a `[research]` subtask in `state: pending`
 
-1. **Resolve only the blocking unknown.** Do not build production features.
-2. **Record the finding** in `implementation.md`: `state: complete`, evidence of what was learned.
-3. **Commit** investigation notes or scratch code as `research: <what was investigated>` (or skip commit if no code changed).
-4. **Append learnings** with the finding and its impact on the plan.
-5. **Advance** to the next subtask — the orchestrator detects the type and state and loads the right skill.
+1. **Mark the todo item `in_progress`** for this subtask.
+2. **Resolve only the blocking unknown.** Do not build production features.
+3. **Record the finding** in `implementation.md`: `state: complete`, evidence of what was learned.
+4. **Commit** investigation notes or scratch code as `research: <what was investigated>` (or skip commit if no code changed).
+5. **Append learnings** with the finding and its impact on the plan.
+6. **Mark the todo item `completed`.**
+7. **Advance** to the next subtask — the orchestrator detects the type and state and loads the right skill.
 
 ---
 
