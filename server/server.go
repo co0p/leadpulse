@@ -22,6 +22,7 @@ func Start(addr string, addMemberUC AddMemberUC, getMembersUC GetMembersUC, edit
 
 	// Register Members API endpoints
 	if addMemberUC != nil && getMembersUC != nil && editMemberUC != nil && deactivateMemberUC != nil {
+		// JSON API endpoints
 		mux.HandleFunc("POST /api/members", func(w http.ResponseWriter, r *http.Request) {
 			HandlerAddMember(w, r, addMemberUC)
 		})
@@ -50,6 +51,30 @@ func Start(addr string, addMemberUC AddMemberUC, getMembersUC GetMembersUC, edit
 				return
 			}
 			HandlerDeleteMember(w, r, deactivateMemberUC, memberID)
+		})
+
+		// HTML page endpoints
+		mux.HandleFunc("GET /members", func(w http.ResponseWriter, r *http.Request) {
+			HandlerGetMembersPage(w, r, getMembersUC)
+		})
+
+		mux.HandleFunc("GET /members/add", func(w http.ResponseWriter, r *http.Request) {
+			HandlerGetAddMemberPage(w, r)
+		})
+
+		mux.HandleFunc("POST /members", func(w http.ResponseWriter, r *http.Request) {
+			HandlerPostAddMember(w, r, addMemberUC)
+		})
+
+		mux.HandleFunc("GET /members/{id}/edit", func(w http.ResponseWriter, r *http.Request) {
+			// Extract memberID from path parameter
+			idStr := r.PathValue("id")
+			memberID, err := strconv.ParseInt(idStr, 10, 64)
+			if err != nil {
+				http.Error(w, "Invalid member ID", http.StatusBadRequest)
+				return
+			}
+			HandlerGetEditMemberPage(w, r, getMembersUC, memberID)
 		})
 	}
 

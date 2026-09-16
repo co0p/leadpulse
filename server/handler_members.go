@@ -273,3 +273,220 @@ func HandlerGetMembersPage(w http.ResponseWriter, r *http.Request, getMembersUC 
 
 	fmt.Fprint(w, html)
 }
+
+// HandlerGetAddMemberPage handles GET /members/add (add member form page)
+func HandlerGetAddMemberPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	// Simple HTML form
+	html := `
+	<!DOCTYPE html>
+	<html>
+	<head><title>Add Member</title></head>
+	<body>
+		<h1>Add Member</h1>
+		<form method="POST" action="/members">
+			<div>
+				<label>First Name:</label>
+				<input type="text" name="firstName" required>
+			</div>
+			<div>
+				<label>Last Name:</label>
+				<input type="text" name="lastName" required>
+			</div>
+			<div>
+				<label>Seniority:</label>
+				<select name="seniority" required>
+					<option value="">-- Select --</option>
+					<option value="junior">Junior</option>
+					<option value="mid">Mid-Level</option>
+					<option value="senior">Senior</option>
+					<option value="lead">Lead</option>
+				</select>
+			</div>
+			<button type="submit">Add Member</button>
+			<a href="/members">Cancel</a>
+		</form>
+	</body>
+	</html>
+	`
+	fmt.Fprint(w, html)
+}
+
+// HandlerPostAddMember handles POST /members (form submission for add)
+func HandlerPostAddMember(w http.ResponseWriter, r *http.Request, addMemberUC AddMemberUC) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Parse form data
+	if err := r.ParseForm(); err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "<html><body><h1>Error</h1><p>Invalid form data</p></body></html>")
+		return
+	}
+
+	firstName := r.FormValue("firstName")
+	lastName := r.FormValue("lastName")
+	seniority := r.FormValue("seniority")
+
+	// Call use case
+	output, err := addMemberUC.Execute(members.AddMemberInput{
+		FirstName: firstName,
+		LastName:  lastName,
+		Seniority: seniority,
+	})
+
+	if err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		html := fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html>
+		<head><title>Add Member</title></head>
+		<body>
+			<h1>Add Member</h1>
+			<p style="color: red;">Error: %s</p>
+			<form method="POST" action="/members">
+				<div>
+					<label>First Name:</label>
+					<input type="text" name="firstName" value="%s" required>
+				</div>
+				<div>
+					<label>Last Name:</label>
+					<input type="text" name="lastName" value="%s" required>
+				</div>
+				<div>
+					<label>Seniority:</label>
+					<select name="seniority" required>
+						<option value="">-- Select --</option>
+						<option value="junior" %s>Junior</option>
+						<option value="mid" %s>Mid-Level</option>
+						<option value="senior" %s>Senior</option>
+						<option value="lead" %s>Lead</option>
+					</select>
+				</div>
+				<button type="submit">Add Member</button>
+				<a href="/members">Cancel</a>
+			</form>
+		</body>
+		</html>
+		`, err.Error(), firstName, lastName,
+			map[bool]string{true: "selected"}[seniority == "junior"],
+			map[bool]string{true: "selected"}[seniority == "mid"],
+			map[bool]string{true: "selected"}[seniority == "senior"],
+			map[bool]string{true: "selected"}[seniority == "lead"])
+		fmt.Fprint(w, html)
+		return
+	}
+
+	// Redirect to members list
+	w.Header().Set("Location", "/members")
+	w.WriteHeader(http.StatusSeeOther)
+
+	_ = output // silence unused warning
+}
+
+// HandlerGetEditMemberPage handles GET /members/{id}/edit (edit member form page)
+func HandlerGetEditMemberPage(w http.ResponseWriter, r *http.Request, getMembersUC GetMembersUC, memberID int64) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Call use case to get all members
+	output, err := getMembersUC.Execute()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "<html><body><h1>Error</h1><p>Failed to load members</p></body></html>")
+		return
+	}
+
+	// Find member by ID
+	var foundMember *members.MemberDTO
+	for i := range output.Members {
+		if output.Members[i].ID == memberID {
+			foundMember = &output.Members[i]
+			break
+		}
+	}
+
+	if foundMember == nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprintf(w, "<html><body><h1>Not Found</h1><p>Member not found</p><a href='/members'>Back to members</a></body></html>")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	// Simple HTML form with pre-filled values
+	html := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head><title>Edit Member</title></head>
+	<body>
+		<h1>Edit Member</h1>
+		<form method="POST" action="/api/members/%d" onsubmit="handleEdit(event)">
+			<div>
+				<label>First Name:</label>
+				<input type="text" name="firstName" value="%s" required>
+			</div>
+			<div>
+				<label>Last Name:</label>
+				<input type="text" name="lastName" value="%s" required>
+			</div>
+			<div>
+				<label>Seniority:</label>
+				<select name="seniority" required>
+					<option value="">-- Select --</option>
+					<option value="junior" %s>Junior</option>
+					<option value="mid" %s>Mid-Level</option>
+					<option value="senior" %s>Senior</option>
+					<option value="lead" %s>Lead</option>
+				</select>
+			</div>
+			<button type="submit">Save Member</button>
+			<a href="/members">Cancel</a>
+		</form>
+		<script>
+			async function handleEdit(event) {
+				event.preventDefault();
+				const firstName = document.querySelector('input[name="firstName"]').value;
+				const lastName = document.querySelector('input[name="lastName"]').value;
+				const seniority = document.querySelector('select[name="seniority"]').value;
+				
+				const response = await fetch('/api/members/%d', {
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ firstName, lastName, seniority })
+				});
+				
+				if (response.ok) {
+					window.location.href = '/members';
+				} else {
+					alert('Error saving member');
+				}
+			}
+		</script>
+	</body>
+	</html>
+	`, memberID, foundMember.FirstName, foundMember.LastName,
+		map[bool]string{true: "selected"}[foundMember.Seniority == "junior"],
+		map[bool]string{true: "selected"}[foundMember.Seniority == "mid"],
+		map[bool]string{true: "selected"}[foundMember.Seniority == "senior"],
+		map[bool]string{true: "selected"}[foundMember.Seniority == "lead"],
+		memberID)
+
+	fmt.Fprint(w, html)
+}
