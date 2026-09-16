@@ -333,7 +333,38 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ## In Progress
 
-(None)
+### Web App Shell (Foundation for SPA)
+
+**Goal:** Build the web app shell with sidebar, top bar (with centered search), and main content area using HTMX + Alpine.js + Go templates + Bulma CSS.
+
+**Job Story:** When I load the web app in my browser, I want to see a professional, accessible layout with a persistent sidebar, top navigation bar featuring a centered search bar, and content area, so that I have a foundation for building screens and the app feels polished from the start.
+
+**Scope:**
+- Render full-height shell layout (3 regions: aside/sidebar, header/top bar, main/content)
+- Sidebar component (fixed width 260px desktop, 72px collapsed; logo, nav links, collapsible section, footer button)
+- Top bar component (sticky, 56px; left: sidebar toggle + breadcrumb, center: search input, right: quick action placeholders)
+- Main content area (flexible, scrollable, padding)
+- Responsive behavior (desktop fixed sidebar, mobile overlay drawer, small screens compact)
+- Accessibility (semantic regions, keyboard support, focus states, WCAG 2.1 AA)
+
+**Acceptance criteria:**
+- AC-1: Shell layout with 3 regions, full height, placeholder content ✓ (target)
+- AC-2: Sidebar component with logo, nav, collapse, footer ✓ (target)
+- AC-3: Top bar with sidebar toggle, centered search, quick action placeholders ✓ (target)
+- AC-4: Main content area scrollable, padded, flex layout ✓ (target)
+- AC-5: Responsive desktop/tablet/mobile with centered search ✓ (target)
+- AC-6: Accessibility (semantic HTML, ARIA, keyboard support, focus states) ✓ (target)
+- AC-7: Browser verification (no errors, Bulma renders, search visible) ✓ (target)
+
+**Out of scope:**
+- Search backend API
+- Profile management, login, logout
+- Settings screen, other feature screens
+- Persistent sidebar state, animations, dark mode
+
+**Branch:** `increment/web-app-shell`
+
+**Evidence:** See `.agent/increment.md` for acceptance-test intent and constitution constraints.
 
 ---
 
