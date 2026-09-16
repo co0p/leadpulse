@@ -329,42 +329,63 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 - AC-4: ✅ `go test -race ./...` passes with 34 tests; no functionality lost; original CRUD behavior preserved
 - AC-5: ✅ No circular imports verified via `go build ./core/members`; dependency flow: HTTP → core ← storage (no reversal)
 
----
-
-## In Progress
-
 ### Web App Shell (Foundation for SPA)
 
 **Goal:** Build the web app shell with sidebar, top bar (with centered search), and main content area using HTMX + Alpine.js + Go templates + Bulma CSS.
 
 **Job Story:** When I load the web app in my browser, I want to see a professional, accessible layout with a persistent sidebar, top navigation bar featuring a centered search bar, and content area, so that I have a foundation for building screens and the app feels polished from the start.
 
-**Scope:**
-- Render full-height shell layout (3 regions: aside/sidebar, header/top bar, main/content)
-- Sidebar component (fixed width 260px desktop, 72px collapsed; logo, nav links, collapsible section, footer button)
-- Top bar component (sticky, 56px; left: sidebar toggle + breadcrumb, center: search input, right: quick action placeholders)
-- Main content area (flexible, scrollable, padding)
-- Responsive behavior (desktop fixed sidebar, mobile overlay drawer, small screens compact)
-- Accessibility (semantic regions, keyboard support, focus states, WCAG 2.1 AA)
+**Acceptance scenarios verified:**
+- Shell layout with 3 semantic regions (header, aside, main), full-height flexbox structure ✓
+- Sidebar component with logo, navigation links, collapsible section, footer button ✓
+- Top bar sticky at 56px with sidebar toggle, centered search, quick action placeholders ✓
+- Main content area scrollable with flex layout and padding ✓
+- Responsive behavior: desktop fixed sidebar (260px), tablet/mobile overlay with toggle ✓
+- Accessibility: semantic HTML, ARIA labels, keyboard navigation (Tab, Esc), focus outlines (2px #3273dc) ✓
+- Browser verification: no errors in console, Bulma renders correctly, search input visible and interactive ✓
 
-**Acceptance criteria:**
-- AC-1: Shell layout with 3 regions, full height, placeholder content ✓ (target)
-- AC-2: Sidebar component with logo, nav, collapse, footer ✓ (target)
-- AC-3: Top bar with sidebar toggle, centered search, quick action placeholders ✓ (target)
-- AC-4: Main content area scrollable, padded, flex layout ✓ (target)
-- AC-5: Responsive desktop/tablet/mobile with centered search ✓ (target)
-- AC-6: Accessibility (semantic HTML, ARIA, keyboard support, focus states) ✓ (target)
-- AC-7: Browser verification (no errors, Bulma renders, search visible) ✓ (target)
+**Acceptance criteria met:**
+- AC-1: Shell layout with 3 regions ✓
+- AC-2: Sidebar component ✓
+- AC-3: Top bar with toggle and search ✓
+- AC-4: Main content area ✓
+- AC-5: Responsive desktop/tablet/mobile ✓
+- AC-6: Accessibility (WCAG 2.1 AA target) ✓
+- AC-7: Browser verification ✓
 
-**Out of scope:**
-- Search backend API
-- Profile management, login, logout
-- Settings screen, other feature screens
-- Persistent sidebar state, animations, dark mode
+**Key commits:**
+- Subtask 1 (templates): `fce51e3`
+- Subtask 2 (assets + server routing): `5243213`
+- Subtask 3 (Alpine.js interactivity): `6749ac0`
+- Subtask 4 (responsive verification): `f503dda`
+- Subtask 5 (accessibility audit): `2a372b9`
+- Subtask 6 (cleanup): `44fc199`
+- Subtask 7 (acceptance tests): `bde2340`
 
-**Branch:** `increment/web-app-shell`
+**Test evidence:**
+- 44 tests passing (`go test -race ./...`)
+- 10 new acceptance tests in `server/server_test.go` covering AC-1 through AC-7
+- 34 existing tests remain green (no regression)
+- Focus state verification: visual inspection + keyboard navigation manual test
+- Responsive breakpoints: 3 viewport sizes tested (≥1024px desktop, 769–1023px tablet, ≤768px mobile)
 
-**Evidence:** See `.agent/increment.md` for acceptance-test intent and constitution constraints.
+**Documentation:**
+- `docs/ui.md` — New UI Design System documenting shell layout, breakpoints, accessibility, color palette, typography, and interaction patterns for all future screens
+- `.agent/increment.md` — Increment definition and acceptance criteria
+- `.agent/plan.md` — Technical execution plan (7 subtasks)
+- `.agent/implementation.md` — Completion record with commit hashes
+
+**Architecture notes:**
+- All assets (Bulma, HTMX, Alpine.js) embedded in binary via `embed.FS` (offline-capable, zero CDN)
+- Go `html/template` server-side rendering with progressive enhancement
+- No build step for templates; wired directly in `server/server.go`
+- HTTP routes: `/` serves shell layout, `/dist/*` serves embedded assets
+
+---
+
+## In Progress
+
+*(None currently. Next increment: TBD from roadmap.)*
 
 ---
 

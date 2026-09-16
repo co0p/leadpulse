@@ -91,10 +91,11 @@ No external network connections. No cloud. No server. All data on-device.
 ## Containers
 
 ### `server/` — HTTP Adapter Layer
-- **Technology:** Go `net/http`, Go `html/template`, embedded static assets
-- **Responsibility:** Boot an HTTP server on localhost:8080; serve SPA static assets (HTML, CSS, JS); expose JSON REST API endpoints; handle request/response mapping.
-- **Handlers:** Receive HTTP requests, parse JSON/form data, call use cases via dependency injection, map results to HTTP responses. No business logic; all logic in core use cases.
-- **Constraints:** No direct store or engine access; no database connections. All persistence through injected use case dependencies.
+- **Technology:** Go `net/http`, Go `html/template` (server-side rendering), embedded static assets (CSS, JS, HTML templates)
+- **Responsibility:** Boot an HTTP server on localhost:8080; serve templated HTML shell and SPA screens via server-side rendering; expose JSON REST API endpoints for dynamic data; handle request/response mapping. All frontend assets (Bulma CSS, HTMX, Alpine.js) are embedded in the binary at build time (zero CDN dependencies).
+- **Shell:** The root route `/` serves `server/templates/layout.html` (full-height flexbox layout with sidebar, top bar, and main content area). Shell components are rendered once at server boot; future feature screens layer into the main content area via HTMX or client-side Alpine.js state.
+- **Handlers:** Receive HTTP requests, parse JSON/form data, call use cases via dependency injection, map results to HTTP responses or templated HTML. No business logic; all logic in core use cases.
+- **Constraints:** No direct store or engine access; no database connections. All persistence through injected use case dependencies. No external network calls (all assets embedded or served locally).
 
 ### HTTP Handlers — Request/Response Adapter Pattern
 
