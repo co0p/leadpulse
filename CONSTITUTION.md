@@ -20,35 +20,39 @@ A monthly decision-support tool for Team Leads. Standalone desktop application. 
 
 ## Architecture Boundaries
 
-Five layers. One direction.
+Hexagonal architecture (Ports & Adapters). Business logic independent of infrastructure.
 
 ```
-server/       — HTTP handlers. Request/response mapping. Delegates to coordinators.
-coordinator/  — Orchestration layer. Multi-step workflows. Reusable by HTTP, CLI, future UIs. Stateless, testable.
-service/      — Use cases (transactions). Call store, call engine, return results. Testable without UI.
-store/        — SQLite persistence. Reads/writes domain types. No formula logic.
+server/       — HTTP handlers (adapters). Request/response mapping. Injects use cases. Zero business logic.
+core/         — Application use cases (e.g., AddMemberUseCase). Business logic, aggregates, port interfaces. Zero infrastructure dependencies.
+                └─ Ports (interfaces): MemberRepository (defined in core/, implemented elsewhere)
+storage/      — Adapters. Concrete implementations of ports (e.g., SQLiteTeamMemberRepository). Persistence only.
 engine/       — Pure functions. Scoring, normalization, alerts, trends. No I/O.
 ```
 
-**Rules:**
-- `server` (HTTP handlers) may import `service/coordinator` and stdlib only. No business logic in handlers. Zero UI framework imports. Every handler is unit testable with `httptest`.
-- `service/coordinator` may import `service` and `engine/domain` only. Zero HTTP or UI framework imports. Coordinators are stateless orchestrators (service references are constructor-injected). Unit testable with in-memory repositories.
-- `service` may import `store` and `engine`. Each use case is a transaction: read from `store`, call `engine` if needed, write to `store`, return result.
-- `store` may import `engine` types only (no engine computation).
-- `engine` imports nothing from this project.
+**Dependency Direction (One-Way Inbound):**
+- `core/` depends only on `engine/` types and Go stdlib. Zero HTTP, storage, or framework imports.
+- `server/` (HTTP) depends on `core/` use cases. Injects repository adapters at construction.
+- `storage/` adapters depend on `core/` port interfaces. Implement persistence logic only.
+- `engine/` imports nothing from this project.
 - No circular imports.
+
+**Rules:**
+- `core/` defines aggregates, value objects, use cases, and port interfaces. All business rules live here. Testable in isolation with in-memory adapters.
+- `server/` handlers are thin adapters: parse HTTP request → call use case → map result/error to HTTP response. Unit testable with `httptest` and mocked use cases.
+- `storage/` adapters implement port interfaces from `core/`. Multiple adapters can coexist (e.g., in-memory for tests, SQLite for production). Swappable at composition root.
+- `service/` and coordinator patterns are retired in favor of use cases with explicit dependencies (ports). Existing `service/` functions for future features (e.g., `ScoringService`, `TrendService`) continue to use the service layer pattern.
+- Composition root in `main.go` wires adapters + use cases + handlers. No reflection or DI container. Explicit injection.
 - SQLite file lives in the OS user data directory (`os.UserConfigDir()`).
 - Single binary distribution — no installer, no runtime dependencies.
-- **Presentation is replaceable:** any presentation layer (HTTP SPA, CLI, future UI) can call the same `service/coordinator` and `service/` interfaces.
-
-**Coordinator Pattern (Orchestration Layer):**
-Coordinators are stateless orchestrators that accept application-level inputs (member IDs, month strings, signal maps), sequence service calls, validate before persistence, and return domain error types (not HTTP status codes). Each coordinator lives in `service/coordinator/` and has zero HTTP or UI framework imports. Every coordinator is unit testable in isolation using in-memory repositories. This pattern enables business logic reuse across HTTP handlers, CLI commands, and future presentation layers without duplication. See `docs/adr/ADR-20260915-clean-architecture-layering.md` for detailed pattern documentation.
+- **Presentation is replaceable:** any presentation layer (HTTP SPA, CLI, future UI) can inject the same use cases and port adapters.
 
 **Technology decisions:**
 - Language: Go
 - Database: SQLite via `modernc.org/sqlite` (pure Go, no CGO)
 - Distribution: compiled binary per platform via GitHub Actions
 - Web frontend: HTMX + Alpine.js + Go `html/template`, served from Go binary via `embed.FS`
+- Architecture: Hexagonal (Ports & Adapters) for application logic; see `docs/adr/ADR-20260916-hexagonal-architecture-member-crud.md`
 
 See `docs/architecture.md` for the C4 Level 2 container view.  
 See `docs/adr/` for the decisions behind these choices.

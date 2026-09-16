@@ -1,12 +1,12 @@
-# Increment: Clean Architecture for Member CRUD
+# Increment: Hexagonal Architecture (Ports & Adapters) for Member CRUD
 
 ## Use Case
 
-When I add a new API endpoint or CLI command for member operations, I want to reuse application logic through explicit use cases and repositories instead of coordinators, so that business logic is clearly separated from presentation layers and easier to test, extend, and understand.
+When I add a new API endpoint or CLI command for member operations, I want to reuse application logic through explicit use cases that depend on port abstractions, so that business logic is completely independent of storage technology and presentation layer, enabling portability to CLI, mobile, or future clients.
 
 ## Goal
 
-Refactor member CRUD to follow clean architecture and domain-driven design: replace `MemberAPICoordinator` with explicit use cases (`AddMemberUseCase`, `EditMemberUseCase`, etc.) that depend on repository abstractions, achieving testability, portability, and clear DDD vocabulary.
+Refactor member CRUD to follow Ports & Adapters (Hexagonal Architecture): move business logic to infrastructure-independent `core/` packages (domain aggregates + ports), implement ports as storage adapters in `storage/` (in-memory and SQLite), and replace `MemberAPICoordinator` with explicit use cases, achieving true hexagonal separation of concerns.
 
 ## Branch
 
@@ -14,35 +14,38 @@ Refactor member CRUD to follow clean architecture and domain-driven design: repl
 
 ## Acceptance Criteria
 
-1. **Use cases exist and are tested** — `AddMemberUseCase`, `GetMembersUseCase`, `EditMemberUseCase`, `DeactivateMemberUseCase` all exist in `application/member/` with passing unit tests; each has an `Execute()` method with input/output structs
-2. **Repository abstraction defined** — `domain/member/repository.go` defines `MemberRepository` interface with `Save()`, `FindByID()`, `FindActive()`, `Deactivate()` methods; no implementation logic in interface
-3. **Storage implementations provided** — `storage/memory/member_repository.go` (in-memory) and `storage/sqlite/member_repository.go` (SQLite) both implement `MemberRepository` interface; in-memory is used for tests, SQLite for production
-4. **HTTP handlers call use cases** — `server/handler_members.go` calls `AddMemberUseCase.Execute()`, `GetMembersUseCase.Execute()`, etc.; handlers remain thin adapters parsing HTTP requests and mapping errors
-5. **All tests pass and dependencies are clean** — `go test -race ./...` passes with 21+ server tests; no circular imports; dependency flow is presentation → application → domain (never reversed)
+1. **Core business logic is infrastructure-independent** — `core/members/` contains aggregate (`member.go`), port/interface (`repository.go`), and use cases (`add_member.go`, `get_members.go`, `edit_member.go`, `deactivate_member.go`) with zero imports from `storage/`, `server/`, or Fyne
+2. **Port (interface) defined** — `core/members/repository.go` defines `MemberRepository` port with `Save()`, `FindByID()`, `FindActive()`, `Deactivate()` methods; no implementation logic in port
+3. **Storage adapters implemented** — `storage/memory/member_repository.go` (in-memory adapter) and `storage/sqlite/member_repository.go` (SQLite adapter) both implement `MemberRepository` port; adapters depend on core, never vice versa
+4. **HTTP adapter calls use cases** — `server/handler_members.go` calls use cases directly (not coordinator); handlers remain thin adapters parsing HTTP and mapping errors; `MemberAPICoordinator` removed entirely
+5. **All tests pass and dependencies are clean** — `go test -race ./...` passes with 21+ tests; no circular imports; dependency flow is `server/` → `core/` ← `storage/` (adapters depend inward on core; core has zero outbound dependencies)
 
 ## Acceptance-Test Intent
 
 **End-to-end user journey (optional, advisory):**
 - User action: Start server, call `POST /api/members` with member data
-- Expected: Handler calls `AddMemberUseCase.Execute()`, which uses injected `MemberRepository` to persist, returns UUID member
-- Evidence: Same HTTP behavior as before refactor; integration test passes with in-memory repository injection
+- Expected: HTTP adapter calls `AddMemberUseCase.Execute()`, which uses injected `MemberRepository` port, adapter implements port using SQLite storage, returns UUID member
+- Evidence: Same HTTP behavior as before refactor; integration test passes with in-memory adapter injection; core business logic testable without touching storage or HTTP layers
 
 ## Out Of Scope
 
-- Monthly entry CRUD refactoring (separate increment; monthly coordinator unchanged for now)
-- Domain events, event sourcing, or event-driven architecture (deferred to v2)
-- CQRS (Command/Query Responsibility Segregation) — future optimization, not required for v1
-- CLI implementation or CLI argument parsing (future increment; this refactoring just makes CLI possible)
-- Removing or archiving old `service/coordinator/` code (can coexist during transition; deletion is a separate cleanup task)
-- Changes to `engine/`, `store/`, or `service/member/` layers (they remain as-is for now)
+- Monthly entry CRUD refactoring (separate increment; monthly coordinator and service unchanged for now)
+- Domain events, event sourcing, or event-driven architecture (future consideration)
+- CQRS (Command/Query Responsibility Segregation) — future optimization
+- CLI implementation or CLI argument parsing (separate increment; this refactoring just makes CLI possible)
+- Archiving or cleaning up old `service/coordinator/`, `service/member/`, or `store/` code (deletion is a cleanup task after this increment lands)
+- Changes to `engine/scoring/` layer (unchanged)
+- Removing `engine/domain/` shared value objects; they remain for reuse by other bounded contexts
 
 ## Constitution Constraints
 
-- **Layer separation** — handlers in `server/` must not contain business logic; business logic lives in `application/` (use cases) and `domain/`
-- **Dependency direction** — `server/` → `application/` → `domain/`; no reverse imports; `domain/` has zero dependencies on `application/` or `infrastructure/`
-- **Testing** — use case unit tests use in-memory repositories (injected); no database access per use case test; integration tests wire real SQLite storage; all tests pass with `-race` flag
-- **Repository interface** — defined in `domain/` only; implementations live in `storage/memory/` and `storage/sqlite/`, never in domain package
-- **No Fyne imports** — application and domain layers remain UI-framework-agnostic
+- **Hexagonal architecture** — `core/` is infrastructure-agnostic; `storage/` and `server/` are adapters; core has zero dependencies on adapters
+- **Port definition** — interfaces (ports) live in `core/` only; implementations (adapters) live in `storage/` or `server/`; adapters depend on core, never vice versa
+- **Dependency inversion** — use cases depend on port interfaces, not concrete implementations; ports are injected at composition root (`main.go`)
+- **Testing** — use case unit tests inject in-memory adapter (from `storage/memory/`); no database access per use case test; integration tests wire real SQLite adapter; all tests pass with `-race` flag
+- **No Fyne imports** — `core/` remains UI-framework-agnostic; Fyne imports only in deprecated `ui/` package
+- **Coordinator removal** — `service/coordinator/member_api.go` removed entirely in this increment; no coexistence
+- **No infrastructure leakage** — `core/members/` must not import from `storage/`, `server/`, `engine/`, or `service/` packages
 
 ## Roadmap Entry
 
@@ -63,52 +66,75 @@ server/handler_members.go    → service/coordinator/MemberAPICoordinator
                            store/SQLiteTeamMemberRepository
 ```
 
-### Desired State (After Refactoring)
+### Desired State: Ports & Adapters (Hexagonal Architecture)
+
+**Core (Infrastructure-Independent Business Logic):**
 ```
-Presentation Layer:
-  server/handler_members.go  (thin HTTP adapters; parse request → call use case → serialize response)
-
-Application Layer (Use Cases):
-  application/member/
-    add_member.go            (AddMemberUseCase)
-    get_members.go           (GetMembersUseCase)
-    edit_member.go           (EditMemberUseCase)
-    deactivate_member.go     (DeactivateMemberUseCase)
-
-Domain Layer (Business Rules & Abstractions):
-  domain/member/
-    aggregate.go             (TeamMember aggregate root; unchanged from engine/domain/)
-    repository.go            (MemberRepository interface definition only; no implementation)
-
-Infrastructure Layer (Implementations & External APIs):
-  storage/memory/
-    member_repository.go     (InMemoryMemberRepository; for tests)
-  storage/sqlite/
-    member_repository.go     (SQLiteTeamMemberRepository; production)
-  server/
-    handler_members.go       (HTTP layer; depends on use cases)
+core/members/
+  member.go             # TeamMember aggregate (domain entity)
+  repository.go         # MemberRepository PORT (interface definition only)
+  add_member.go         # AddMemberUseCase
+  get_members.go        # GetMembersUseCase
+  edit_member.go        # EditMemberUseCase
+  deactivate_member.go  # DeactivateMemberUseCase
+  *_test.go             # Use case unit tests (inject in-memory adapter)
 ```
 
-### Dependency Flow (Strictly One Direction)
+**Adapters (Infrastructure Implementations):**
 ```
-server/ (HTTP)
-  ↓ depends on
-application/member/ (Use Cases)
-  ↓ depends on
-domain/member/ (Repository interface + Aggregate)
+storage/
+  memory/
+    member_repository.go    # InMemoryMemberRepository (adapter; implements MemberRepository port)
+  sqlite/
+    member_repository.go    # SQLiteTeamMemberRepository (adapter; implements MemberRepository port)
+    
+server/
+  handler_members.go        # HTTP adapter (thin layer; parses HTTP, calls use cases, maps errors)
+  *_test.go                 # Handler tests (mock use cases)
+```
+
+**Unchanged (Support Layers):**
+```
+engine/
+  scoring/                  # Pure computation
+  domain/                   # Shared value objects (Seniority, FullName, etc.)
   
-storage/memory/ & storage/sqlite/ (Implementations)
-  ↓ depend on
-domain/member/ (interface only)
+main.go                     # Wires adapters + core + domain
 ```
 
-**Rule:** No package above can import packages below. `domain/` has zero imports from `application/`, `storage/`, or `server/`.
+### Dependency Flow: Hexagonal/Ports & Adapters
+
+```
+┌─────────────────────┐
+│   HTTP (Adapter)    │ server/handler_members.go
+│  ↓ (calls)          │
+├─────────────────────┤
+│   CORE (Business)   │ core/members/
+│  ┌─────────────────┐│  - Aggregate: member.go
+│  │ Use Cases       ││  - Port: repository.go
+│  │ (depend on      ││  - Use Cases: add_member.go, etc.
+│  │  ports)         ││
+│  └─────────────────┘│
+├─────────────────────┤
+│ Ports (Interfaces)  │ core/members/repository.go
+│ Zero impl logic     │
+├─────────────────────┤
+│  Storage (Adapter)  │ storage/{memory,sqlite}/member_repository.go
+│  ↑ (implements)     │
+└─────────────────────┘
+```
+
+**Rule:** 
+- `core/` has ZERO imports from `storage/`, `server/`, or `service/`
+- `storage/` and `server/` depend on `core/` (inbound only)
+- No circular imports
+- Core is reusable: same business logic works with any storage adapter, any presentation adapter (HTTP, CLI, gRPC, etc.)
 
 ### Use Case Pattern
 
-**Input/Output Structs:**
+**Input/Output Structs (in `core/members/`):**
 ```go
-// application/member/input_output.go
+// core/members/add_member.go
 
 type AddMemberInput struct {
   FirstName string
@@ -124,62 +150,131 @@ type AddMemberOutput struct {
   Status    string
   CreatedAt time.Time
 }
-
-type GetMembersOutput struct {
-  Members []AddMemberOutput
-}
-
-type EditMemberInput struct {
-  MemberID  int64  // domain ID
-  FirstName string // optional
-  LastName  string // optional
-  Seniority string // optional
-}
-
-type EditMemberOutput struct {
-  ID        string
-  FirstName string
-  LastName  string
-  Seniority string
-  Status    string
-  CreatedAt time.Time
-}
 ```
 
-**Use Case Interface (for testability):**
+**Port Definition (Interface, in `core/members/repository.go`):**
 ```go
-// application/member/add_member.go
+// core/members/repository.go
+// This is a PORT (not an adapter). No implementation here.
 
-type AddMemberUseCase interface {
-  Execute(input AddMemberInput) (*AddMemberOutput, error)
-}
-
-type addMemberUseCase struct {
-  repo MemberRepository
-  // domain services if needed
-}
-
-func NewAddMemberUseCase(repo domain.MemberRepository) AddMemberUseCase {
-  return &addMemberUseCase{repo: repo}
-}
-
-func (uc *addMemberUseCase) Execute(input AddMemberInput) (*AddMemberOutput, error) {
-  // Validation (via domain value objects or domain services)
-  // Business logic (create aggregate, call domain services)
-  // Persistence (call repo.Save())
-  // Return output
+type MemberRepository interface {
+  Save(member *Member) error
+  FindByID(id int64) (*Member, error)
+  FindActive() ([]*Member, error)
+  Deactivate(id int64) error
 }
 ```
 
-**HTTP Handler (thin adapter):**
+**Use Case (in `core/members/`):**
+```go
+// core/members/add_member.go
+
+type AddMemberUseCase struct {
+  repo MemberRepository  // Injected port (adapter implements this)
+}
+
+func NewAddMemberUseCase(repo MemberRepository) *AddMemberUseCase {
+  return &AddMemberUseCase{repo: repo}
+}
+
+func (uc *AddMemberUseCase) Execute(input AddMemberInput) (*AddMemberOutput, error) {
+  // Validation (domain rules)
+  // Business logic (create aggregate)
+  // Persistence (call port interface)
+  err := uc.repo.Save(member)
+  if err != nil {
+    return nil, err
+  }
+  return &AddMemberOutput{...}, nil
+}
+```
+
+**Adapter Implementation (in `storage/sqlite/member_repository.go`):**
+```go
+// storage/sqlite/member_repository.go
+// This is an ADAPTER (implements the MemberRepository port)
+
+package sqlite
+
+import "leadpulse/core/members"  // Depends on port interface
+
+type SQLiteTeamMemberRepository struct {
+  db *sql.DB
+}
+
+// Implements members.MemberRepository interface
+func (r *SQLiteTeamMemberRepository) Save(member *members.Member) error {
+  // Actual SQLite logic here
+  stmt := r.db.Prepare("INSERT INTO members ...")
+  return stmt.Exec(member.FirstName, ...).Error()
+}
+
+func (r *SQLiteTeamMemberRepository) FindByID(id int64) (*members.Member, error) {
+  // Query logic
+}
+
+func (r *SQLiteTeamMemberRepository) FindActive() ([]*members.Member, error) {
+  // Query logic
+}
+
+func (r *SQLiteTeamMemberRepository) Deactivate(id int64) error {
+  // Update logic
+}
+```
+
+**In-Memory Adapter (in `storage/memory/member_repository.go`):**
+```go
+// storage/memory/member_repository.go
+// ADAPTER: in-memory implementation for testing
+
+package memory
+
+import "leadpulse/core/members"
+
+type InMemoryMemberRepository struct {
+  members map[int64]*members.Member
+}
+
+// Implements members.MemberRepository interface
+func (r *InMemoryMemberRepository) Save(member *members.Member) error {
+  r.members[member.ID] = member
+  return nil
+}
+
+func (r *InMemoryMemberRepository) FindByID(id int64) (*members.Member, error) {
+  m, ok := r.members[id]
+  if !ok {
+    return nil, ErrNotFound
+  }
+  return m, nil
+}
+// ... etc
+```
+
+**HTTP Adapter (in `server/handler_members.go`):**
 ```go
 // server/handler_members.go
+// ADAPTER: HTTP layer (entry point)
 
-func HandlerAddMember(w http.ResponseWriter, r *http.Request, addUC application.AddMemberUseCase) {
+package server
+
+import (
+  "leadpulse/core/members"
+  "encoding/json"
+  "net/http"
+)
+
+type AddMemberRequest struct {
+  FirstName string `json:"firstName"`
+  LastName  string `json:"lastName"`
+  Seniority string `json:"seniority"`
+}
+
+func HandlerAddMember(w http.ResponseWriter, r *http.Request, addUC *members.AddMemberUseCase) {
   var req AddMemberRequest
   json.NewDecoder(r.Body).Decode(&req)
   
-  output, err := addUC.Execute(application.AddMemberInput{
+  output, err := addUC.Execute(members.AddMemberInput{
     FirstName: req.FirstName,
     LastName:  req.LastName,
     Seniority: req.Seniority,
@@ -196,13 +291,56 @@ func HandlerAddMember(w http.ResponseWriter, r *http.Request, addUC application.
 }
 ```
 
-**Use Case Unit Test (no database, no HTTP):**
+**Wiring (in `main.go`):**
 ```go
-// application/member/add_member_test.go
+// main.go
+// Composition root: wire adapters + core + ports
+
+package main
+
+import (
+  "leadpulse/core/members"
+  "leadpulse/storage/sqlite"
+  "leadpulse/server"
+)
+
+func main() {
+  // Create adapter
+  repo := sqlite.NewSQLiteTeamMemberRepository(db)
+  
+  // Create use cases (inject port)
+  addMemberUC := members.NewAddMemberUseCase(repo)
+  getMembersUC := members.NewGetMembersUseCase(repo)
+  editMemberUC := members.NewEditMemberUseCase(repo)
+  deactivateMemberUC := members.NewDeactivateMemberUseCase(repo)
+  
+  // Wire HTTP adapters
+  mux := http.NewServeMux()
+  mux.HandleFunc("POST /api/members", 
+    func(w http.ResponseWriter, r *http.Request) {
+      server.HandlerAddMember(w, r, addMemberUC)
+    })
+  
+  // Start server
+  http.ListenAndServe(":8080", mux)
+}
+```
+
+**Use Case Unit Test (in `core/members/add_member_test.go`):**
+```go
+// core/members/add_member_test.go
+// Unit test: inject in-memory adapter (no database, no HTTP)
+
+package members
+
+import (
+  "testing"
+  "leadpulse/storage/memory"
+)
 
 func TestAddMemberUseCase_Success(t *testing.T) {
-  // Inject in-memory repository (from storage/memory/)
-  repo := storage.NewInMemoryMemberRepository()
+  // Inject in-memory adapter
+  repo := memory.NewInMemoryMemberRepository()
   
   uc := NewAddMemberUseCase(repo)
   
@@ -219,110 +357,93 @@ func TestAddMemberUseCase_Success(t *testing.T) {
   if output.FirstName != "Alice" {
     t.Errorf("expected Alice, got %s", output.FirstName)
   }
+  
+  // Verify persistence via adapter
+  retrieved, err := repo.FindByID(output.ID) // Direct repo call, or through use case
+  if err != nil {
+    t.Fatalf("member not persisted: %v", err)
+  }
+  
+  if retrieved.FirstName != "Alice" {
+    t.Errorf("persisted member has wrong name: %s", retrieved.FirstName)
+  }
 }
 ```
-
-### Repository Interface (Domain Package)
-
-**Location:** `domain/member/repository.go`
-
-```go
-package domain
-
-// MemberRepository is the abstraction for member persistence.
-// All implementations (SQLite, in-memory) must conform to this interface.
-type MemberRepository interface {
-  Save(member *TeamMember) error
-  FindByID(id TeamMemberID) (*TeamMember, error)
-  FindActive() ([]*TeamMember, error)
-  Deactivate(id TeamMemberID) error
-}
-```
-
-### Storage Implementations
-
-**In-Memory (for tests):**
-```
-storage/
-  memory/
-    member_repository.go  (InMemoryMemberRepository implements domain.MemberRepository)
-```
-
-**SQLite (for production):**
-```
-storage/
-  sqlite/
-    member_repository.go  (SQLiteTeamMemberRepository implements domain.MemberRepository)
-```
-
-Both packages:
-- Import only `domain/` (interfaces and aggregates)
-- Do not import `application/`, `service/`, or `server/`
-- Provide a factory function: `New<Impl>MemberRepository() domain.MemberRepository`
 
 ### Migration Path
 
-1. Create `domain/member/repository.go` with interface
-2. Create `storage/memory/member_repository.go` with in-memory implementation
-3. Create `storage/sqlite/member_repository.go` by extracting/refactoring from `store/member_test.go` and `store/member.go`
-4. Create `application/member/` use cases with `Execute()` methods
-5. Refactor `server/handler_members.go` to call use cases instead of coordinator
-6. Update `main.go` to inject in-memory repository for tests, SQLite repository for production
-7. Keep old `service/coordinator/member_api.go` and `store/` untouched during transition; can be archived later
+1. **Move aggregate:** `TeamMember` from `engine/domain/aggregates.go` → `core/members/member.go` (or keep in engine/domain and import from core/members if shared)
+2. **Define port:** Create `core/members/repository.go` with `MemberRepository` interface
+3. **Create in-memory adapter:** `storage/memory/member_repository.go` (for tests)
+4. **Create SQLite adapter:** `storage/sqlite/member_repository.go` (extract from `store/member.go`)
+5. **Create use cases:** `core/members/{add,get,edit,deactivate}_member.go` with `Execute()` methods
+6. **Create use case tests:** `core/members/*_test.go` (inject in-memory adapter)
+7. **Refactor HTTP adapters:** `server/handler_members.go` to call use cases (not coordinator)
+8. **Refactor handler tests:** `server/handler_members_test.go` to mock use cases
+9. **Update main.go:** Wire adapters + use cases at composition root
+10. **Delete coordinator:** Remove `service/coordinator/member_api.go` entirely
+11. **Run full test suite:** `go test -race ./...` passes with 21+ tests
 
 ## Testing Strategy
 
-**Use case unit tests:**
-- Location: `application/member/<use_case>_test.go`
-- Setup: Create in-memory repository, create use case with it, call `Execute()`
-- Assertions: Check output, verify repository state
-- Speed: Milliseconds; no database, no HTTP, no I/O
+**Use case unit tests (in `core/members/*_test.go`):**
+- Inject in-memory adapter from `storage/memory/`
+- Call use case `Execute()`, verify output and side effects
+- No database, no HTTP, no I/O → milliseconds
 - Coverage: success path + error cases (validation, not-found, duplicate)
 
-**Storage integration tests (per implementation):**
-- Location: `storage/memory/<impl>_test.go` and `storage/sqlite/<impl>_test.go`
-- Setup: Create repository (in-memory or SQLite)
-- Assertions: Verify CRUD operations work correctly
-- Speed: Milliseconds (memory), milliseconds–seconds (SQLite with `:memory:` DSN)
+**Storage adapter tests (in `storage/{memory,sqlite}/*_test.go`):**
+- Test CRUD operations for each adapter
+- Memory adapter: instant, no setup needed
+- SQLite adapter: uses `:memory:` DSN or test database
+- Verify adapters correctly implement port interface
 
-**HTTP handler tests (unchanged from current):**
-- Location: `server/handler_members_test.go`
-- Setup: Mock use case with test fixtures
-- Assertions: HTTP status, JSON response body
-- Speed: Milliseconds; no real use case or database
+**HTTP adapter tests (in `server/handler_members_test.go`):**
+- Mock use cases (not the real core or storage layer)
+- Verify HTTP parsing, status codes, JSON responses
+- No database, no storage layer; tests remain fast
 
-**Full integration tests (optional, verify end-to-end):**
-- Location: `server/integration_test.go`
-- Setup: Real SQLite repository + real use cases + HTTP handler
-- Assertions: POST → GET → PATCH → DELETE workflow
+**Integration tests (optional, verify end-to-end):**
+- Real SQLite adapter + real use cases + HTTP adapter
+- Verify full CRUD workflow
+- Slower than unit tests; run separately if needed
 
 ## Risks & Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| Circular imports if not careful | Build failure; architecture violation | Strict package review; interfaces in domain/ only; no application→infrastructure imports |
-| More layers = more mocking in tests | Test complexity increase | Use cases only need repository mock (1 interface); simpler than coordinator tests with multiple dependencies |
-| Package rename churn | Refactoring noise | Move files once; tests verify new imports work; git history preserved |
-| Coordinator not removed immediately | Temporary code duplication | Coordinator left as-is during increment; removal is separate "cleanup" task in future increment |
-| Domain layer becomes too large | Bounded context bleeding | Start with member aggregate only; if domain grows, split into separate packages per bounded context |
+| Circular imports (core imports storage) | Build failure; architecture violation | Strict review; interfaces (ports) in core only; adapters depend inward; ban any core→storage imports |
+| Core becomes too large | Bounded context bleeding | Start with member aggregate only; each use case gets one file; future: split into separate packages per BC |
+| Coordinator removal breaks during refactoring | Test failures; incomplete cutover | Adapter wiring in main.go tested before coordinator removal; all tests pass before deletion |
+| More adapters = more mock types in tests | Test boilerplate increase | Each adapter is simple; in-memory adapter < 50 lines; minimal mocking needed |
+| Package import paths become verbose | Cognitive load | Accepted trade-off; clear architecture outweighs path length; IDE autocomplete helps |
+| Storing `MemberRepository` port in `core/members/` alongside use cases | Package size | Intentional design; port definition lives where it's used (core/members); keeps interfaces and implementations coupled at right abstraction level |
 
 ## Evidence & References
 
-**Clean Architecture (Robert C. Martin):**
-- Presentation (HTTP) → Application (Use Cases) → Domain (Business Rules)
-- Domain has no dependencies; Application depends on Domain; Presentation depends on both
+**Hexagonal Architecture / Ports & Adapters (Alistair Cockburn):**
+- Core business logic is independent of infrastructure (database, UI, frameworks)
+- Ports are interfaces; adapters implement ports
+- Multiple adapters (in-memory, SQLite, Postgres, REST, CLI, gRPC) can work with same core
+- Tests inject test adapters; production wires real adapters at composition root
 
 **Domain-Driven Design (Eric Evans):**
-- Bounded contexts (member operations = one bounded context)
-- Aggregates (TeamMember = aggregate root)
-- Repositories (abstraction for persistence)
+- Aggregates (TeamMember) encapsulate business rules
+- Repositories abstract persistence (interface in core, implementations external)
+- Bounded contexts (member operations = one context) isolate responsibility
+
+**Clean Architecture (Robert C. Martin):**
+- Dependency rule: dependencies point inward (adapters → core → nothing)
+- Core has zero dependencies on frameworks or libraries
+- Testability: core logic tested without touching infrastructure
 
 **Go Community Practices:**
-- Kubernetes: `pkg/` directory with interfaces + implementations
-- Docker: clear separation of API, runtime, daemon layers
-- CockroachDB: application → storage (abstraction) → engine (implementation)
+- Kubernetes: core business logic in `pkg/`, adapters in `cmd/` and controllers
+- Docker: engine/container (core) vs. cli (adapter) vs. daemon (adapter)
+- Standard library: `io.Writer` is a port; `os.File`, `bytes.Buffer` are adapters
 
-**Industry Examples:**
-- Successful microservices use this pattern to enable CLI, gRPC, and REST from same business logic
-- Testing becomes faster and clearer with use case boundaries and injected dependencies
+**Industry Adoption:**
+- Microservices: enables CLI, gRPC, GraphQL, REST all from same core
+- Enterprise systems: core portable across UI frameworks, databases, cloud providers
+- Testable design: core tests run in milliseconds; integration tests optional
 

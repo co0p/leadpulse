@@ -6,9 +6,30 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
-	"leadpulse/engine/domain"
-	"leadpulse/service/coordinator"
+	"leadpulse/core/members"
 )
+
+// UseCase interfaces for dependency injection
+
+// AddMemberUC defines the interface for the Add Member use case
+type AddMemberUC interface {
+	Execute(input members.AddMemberInput) (*members.AddMemberOutput, error)
+}
+
+// GetMembersUC defines the interface for the Get Members use case
+type GetMembersUC interface {
+	Execute() (*members.GetMembersOutput, error)
+}
+
+// EditMemberUC defines the interface for the Edit Member use case
+type EditMemberUC interface {
+	Execute(input members.EditMemberInput) (*members.EditMemberOutput, error)
+}
+
+// DeactivateMemberUC defines the interface for the Deactivate Member use case
+type DeactivateMemberUC interface {
+	Execute(input members.DeactivateMemberInput) (*members.DeactivateMemberOutput, error)
+}
 
 // AddMemberRequest represents the JSON request body for adding a member
 type AddMemberRequest struct {
@@ -34,7 +55,7 @@ type ErrorResponse struct {
 }
 
 // HandlerAddMember handles POST /api/members
-func HandlerAddMember(w http.ResponseWriter, r *http.Request, coord *coordinator.MemberAPICoordinator) {
+func HandlerAddMember(w http.ResponseWriter, r *http.Request, addUC AddMemberUC) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -52,55 +73,32 @@ func HandlerAddMember(w http.ResponseWriter, r *http.Request, coord *coordinator
 		return
 	}
 
-	// Call coordinator to add member
-	err := coord.AddMember(req.FirstName, req.LastName, domain.Seniority(req.Seniority))
+	// Call use case to add member
+	input := members.AddMemberInput{
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Seniority: req.Seniority,
+	}
+
+	output, err := addUC.Execute(input)
 	if err != nil {
-		// Handle validation error
-		if validationErr, ok := err.(*coordinator.ValidationError); ok {
-			w.Header().Set("Content-Type", "application/json")
-			statusCode := http.StatusBadRequest
-			if validationErr.Kind == coordinator.ValidationErrorKindDatabaseFailure {
-				statusCode = http.StatusInternalServerError
-			}
-			w.WriteHeader(statusCode)
-			json.NewEncoder(w).Encode(ErrorResponse{
-				Error: validationErr.UserMessage(),
-				Kind:  string(validationErr.Kind),
-			})
-			return
-		}
-		// Unexpected error
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ErrorResponse{
-			Error: "Unexpected error",
-			Kind:  "unknown",
+			Error: err.Error(),
+			Kind:  "validation_error",
 		})
 		return
 	}
-
-	// Get the newly added member (last member in list)
-	members := coord.GetMembers()
-	if len(members) == 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error: "Member was created but not found",
-			Kind:  "unknown",
-		})
-		return
-	}
-
-	newMember := members[len(members)-1]
 
 	// Convert to response format
 	response := MemberResponse{
-		ID:        memberIDToUUID(int64(newMember.ID())),
-		FirstName: newMember.Name().First,
-		LastName:  newMember.Name().Last,
-		Seniority: string(newMember.Seniority()),
-		Status:    statusFromMember(&newMember),
-		CreatedAt: newMember.CreatedAt().Format("2006-01-02T15:04:05Z"),
+		ID:        memberIDToUUID(output.ID),
+		FirstName: output.FirstName,
+		LastName:  output.LastName,
+		Seniority: output.Seniority,
+		Status:    output.Status,
+		CreatedAt: output.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -109,14 +107,15 @@ func HandlerAddMember(w http.ResponseWriter, r *http.Request, coord *coordinator
 }
 
 // HandlerGetMembers handles GET /api/members
-func HandlerGetMembers(w http.ResponseWriter, r *http.Request, coord *coordinator.MemberAPICoordinator) {
+func HandlerGetMembers(w http.ResponseWriter, r *http.Request, getUC GetMembersUC) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Reload members from service
-	if err := coord.Load(); err != nil {
+	// Call use case to get members
+	output, err := getUC.Execute()
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{
@@ -126,17 +125,16 @@ func HandlerGetMembers(w http.ResponseWriter, r *http.Request, coord *coordinato
 		return
 	}
 
-	members := coord.GetMembers()
-	responses := make([]MemberResponse, 0, len(members))
+	responses := make([]MemberResponse, 0, len(output.Members))
 
-	for _, member := range members {
+	for _, dto := range output.Members {
 		responses = append(responses, MemberResponse{
-			ID:        memberIDToUUID(int64(member.ID())),
-			FirstName: member.Name().First,
-			LastName:  member.Name().Last,
-			Seniority: string(member.Seniority()),
-			Status:    statusFromMember(&member),
-			CreatedAt: member.CreatedAt().Format("2006-01-02T15:04:05Z"),
+			ID:        memberIDToUUID(dto.ID),
+			FirstName: dto.FirstName,
+			LastName:  dto.LastName,
+			Seniority: dto.Seniority,
+			Status:    dto.Status,
+			CreatedAt: dto.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		})
 	}
 
@@ -153,7 +151,7 @@ type EditMemberRequest struct {
 }
 
 // HandlerEditMember handles PATCH /api/members/{id}
-func HandlerEditMember(w http.ResponseWriter, r *http.Request, coord *coordinator.MemberAPICoordinator, memberID int64) {
+func HandlerEditMember(w http.ResponseWriter, r *http.Request, editUC EditMemberUC, memberID int64) {
 	if r.Method != http.MethodPatch {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -171,50 +169,32 @@ func HandlerEditMember(w http.ResponseWriter, r *http.Request, coord *coordinato
 		return
 	}
 
-	// Call coordinator to edit member
-	err := coord.EditMember(memberID, req.FirstName, req.LastName, domain.Seniority(req.Seniority))
-	if err != nil {
-		if validationErr, ok := err.(*coordinator.ValidationError); ok {
-			w.Header().Set("Content-Type", "application/json")
-			statusCode := http.StatusBadRequest
-			if validationErr.Kind == coordinator.ValidationErrorKindDatabaseFailure {
-				statusCode = http.StatusInternalServerError
-			}
-			w.WriteHeader(statusCode)
-			json.NewEncoder(w).Encode(ErrorResponse{
-				Error: validationErr.UserMessage(),
-				Kind:  string(validationErr.Kind),
-			})
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error: "Unexpected error",
-			Kind:  "unknown",
-		})
-		return
+	// Call use case to edit member
+	input := members.EditMemberInput{
+		MemberID:  memberID,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+		Seniority: req.Seniority,
 	}
 
-	// Get the updated member
-	member := coord.GetMemberByID(memberID)
-	if member == nil {
+	output, err := editUC.Execute(input)
+	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ErrorResponse{
-			Error: "Member was updated but not found",
-			Kind:  "unknown",
+			Error: err.Error(),
+			Kind:  "validation_error",
 		})
 		return
 	}
 
 	response := MemberResponse{
-		ID:        memberIDToUUID(int64(member.ID())),
-		FirstName: member.Name().First,
-		LastName:  member.Name().Last,
-		Seniority: string(member.Seniority()),
-		Status:    statusFromMember(member),
-		CreatedAt: member.CreatedAt().Format("2006-01-02T15:04:05Z"),
+		ID:        memberIDToUUID(output.ID),
+		FirstName: output.FirstName,
+		LastName:  output.LastName,
+		Seniority: output.Seniority,
+		Status:    output.Status,
+		CreatedAt: fmt.Sprintf("%v", output.CreatedAt),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -223,33 +203,21 @@ func HandlerEditMember(w http.ResponseWriter, r *http.Request, coord *coordinato
 }
 
 // HandlerDeleteMember handles DELETE /api/members/{id}
-func HandlerDeleteMember(w http.ResponseWriter, r *http.Request, coord *coordinator.MemberAPICoordinator, memberID int64) {
+func HandlerDeleteMember(w http.ResponseWriter, r *http.Request, deactivateUC DeactivateMemberUC, memberID int64) {
 	if r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Call coordinator to deactivate member
-	err := coord.DeactivateMember(memberID)
+	// Call use case to deactivate member
+	input := members.DeactivateMemberInput{MemberID: memberID}
+	_, err := deactivateUC.Execute(input)
 	if err != nil {
-		if validationErr, ok := err.(*coordinator.ValidationError); ok {
-			w.Header().Set("Content-Type", "application/json")
-			statusCode := http.StatusBadRequest
-			if validationErr.Kind == coordinator.ValidationErrorKindDatabaseFailure {
-				statusCode = http.StatusInternalServerError
-			}
-			w.WriteHeader(statusCode)
-			json.NewEncoder(w).Encode(ErrorResponse{
-				Error: validationErr.UserMessage(),
-				Kind:  string(validationErr.Kind),
-			})
-			return
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(ErrorResponse{
-			Error: "Unexpected error",
-			Kind:  "unknown",
+			Error: err.Error(),
+			Kind:  "validation_error",
 		})
 		return
 	}
@@ -265,12 +233,4 @@ func memberIDToUUID(memberID int64) string {
 	// Use UUID v5 with a deterministic namespace to generate consistent UUIDs from int64 IDs
 	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // UUID v5 namespace
 	return uuid.NewSHA1(namespace, []byte(fmt.Sprintf("member:%d", memberID))).String()
-}
-
-// statusFromMember converts a member's active state to a status string
-func statusFromMember(member *domain.TeamMember) string {
-	if member.IsActive() {
-		return "active"
-	}
-	return "inactive"
 }

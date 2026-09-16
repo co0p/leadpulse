@@ -8,10 +8,9 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"leadpulse/core/members"
 	"leadpulse/server"
-	"leadpulse/service/coordinator"
-	"leadpulse/service/member"
-	"leadpulse/service/monthly"
+	"leadpulse/storage/sqlite"
 	"leadpulse/store"
 )
 
@@ -33,20 +32,17 @@ func main() {
 		log.Fatalf("Failed to initialize schema: %v", err)
 	}
 
-	// Initialize repositories (persistence layer)
-	memberRepo := store.NewSQLiteTeamMemberRepository(db)
-	entryRepo := store.NewSQLiteMonthlyEntryRepository(db)
+	// Initialize storage adapters (persistence layer)
+	memberRepo := sqlite.NewSQLiteTeamMemberRepository(db)
 
-	// Initialize application services (use case layer)
-	memberService := member.NewService(memberRepo, entryRepo)
-	_ = monthly.NewService(memberRepo, entryRepo) // Will be used for monthly entry API in future
+	// Initialize use cases (application layer)
+	addMemberUC := members.NewAddMemberUseCase(memberRepo)
+	getMembersUC := members.NewGetMembersUseCase(memberRepo)
+	editMemberUC := members.NewEditMemberUseCase(memberRepo)
+	deactivateMemberUC := members.NewDeactivateMemberUseCase(memberRepo)
 
-	// Initialize coordinators (HTTP API layer)
-	memberAPICoord := coordinator.NewMemberAPICoordinator(memberService)
-	memberAPICoord.Load()
-
-	// Boot HTTP server with coordinators for API handlers (blocks indefinitely)
-	if err := server.Start("localhost:8080", memberAPICoord); err != nil {
+	// Boot HTTP server with use cases for API handlers (blocks indefinitely)
+	if err := server.Start("localhost:8080", addMemberUC, getMembersUC, editMemberUC, deactivateMemberUC); err != nil {
 		log.Fatalf("HTTP server error: %v", err)
 	}
 }

@@ -6,8 +6,6 @@ import (
 	"io/fs"
 	"net/http"
 	"strconv"
-
-	"leadpulse/service/coordinator"
 )
 
 // Assets holds the embedded web directory.
@@ -18,17 +16,17 @@ var Assets embed.FS
 // It serves static assets from the embedded FS under dist/.
 // It also registers API endpoints for team member CRUD operations.
 // The function blocks indefinitely while the server runs.
-func Start(addr string, memberAPICoord *coordinator.MemberAPICoordinator) error {
+func Start(addr string, addMemberUC AddMemberUC, getMembersUC GetMembersUC, editMemberUC EditMemberUC, deactivateMemberUC DeactivateMemberUC) error {
 	mux := http.NewServeMux()
 
 	// Register Members API endpoints
-	if memberAPICoord != nil {
+	if addMemberUC != nil && getMembersUC != nil && editMemberUC != nil && deactivateMemberUC != nil {
 		mux.HandleFunc("POST /api/members", func(w http.ResponseWriter, r *http.Request) {
-			HandlerAddMember(w, r, memberAPICoord)
+			HandlerAddMember(w, r, addMemberUC)
 		})
 
 		mux.HandleFunc("GET /api/members", func(w http.ResponseWriter, r *http.Request) {
-			HandlerGetMembers(w, r, memberAPICoord)
+			HandlerGetMembers(w, r, getMembersUC)
 		})
 
 		mux.HandleFunc("PATCH /api/members/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +37,7 @@ func Start(addr string, memberAPICoord *coordinator.MemberAPICoordinator) error 
 				http.Error(w, `{"error":"Invalid member ID","kind":"validation_error"}`, http.StatusBadRequest)
 				return
 			}
-			HandlerEditMember(w, r, memberAPICoord, memberID)
+			HandlerEditMember(w, r, editMemberUC, memberID)
 		})
 
 		mux.HandleFunc("DELETE /api/members/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +48,7 @@ func Start(addr string, memberAPICoord *coordinator.MemberAPICoordinator) error 
 				http.Error(w, `{"error":"Invalid member ID","kind":"validation_error"}`, http.StatusBadRequest)
 				return
 			}
-			HandlerDeleteMember(w, r, memberAPICoord, memberID)
+			HandlerDeleteMember(w, r, deactivateMemberUC, memberID)
 		})
 	}
 

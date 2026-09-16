@@ -1,6 +1,6 @@
 # Architecture
 
-Team Impact Scorecard — structural overview (SPA-first, API-driven).
+Team Impact Scorecard — structural overview (SPA-first, API-driven, hexagonal architecture).
 
 ---
 
@@ -18,54 +18,57 @@ Team Impact Scorecard — structural overview (SPA-first, API-driven).
 │  │  │   Browser SPA    │               │  server/   │  │  │
 │  │  │                  │               │            │  │  │
 │  │  │  HTMX +          │               │  HTTP      │  │  │
-│  │  │  Alpine.js +     │               │  handlers  │  │  │
+│  │  │  Alpine.js +     │               │  adapters  │  │  │
 │  │  │  Go templates    │   (JSON API)  │            │  │  │
 │  │  │                  │               │            │  │  │
 │  │  │  Embedded in     │               └──────┬─────┘  │  │
-│  │  │  Go binary       │                      │ calls   │  │
+│  │  │  Go binary       │                      │ injects │  │
 │  │  │  (embed.FS)      │                      ▼         │  │
 │  │  │                  │   calls       ┌─────────────┐  │  │
 │  │  │                  │ ────────────► │             │  │  │
-│  │  │                  │               │ coordinator/│  │  │
-│  │  │                  │               │             │  │  │
-│  │  └──────────────────┘               │ Orchestrate │  │  │
-│  │                                     │ service     │  │  │
-│  │   (SPA replaceable with               │ calls      │  │
-│  │    CLI, future UIs)                   └──────┬────┘  │  │
-│  │                                              │ calls   │  │
-│  │                                              ▼         │  │
-│  │                                    ┌──────────────┐   │  │
-│  │                                    │              │   │  │
-│  │                      HTTP handlers │  service/    │   │  │
-│  │                      delegate to    │              │   │  │
-│  │                      coordinators   │ Use cases:   │   │  │
-│  │                                    │ AddMember,   │   │  │
-│  │                                    │ SubmitMonth, │   │  │
-│  │                                    │ GenerateAlerts
-│  │                                    │              │   │  │
-│  │                                    └──────┬───────┘   │  │
-│  │                                           │ calls      │  │
-│  │                                           ▼            │  │
-│  │                                    ┌──────────────┐   │  │
-│  │                                    │              │   │  │
-│  │                                    │   store/     │   │  │
-│  │                                    │              │   │  │
-│  │                                    │  SQLite      │   │  │
-│  │                                    │  read/write. │   │  │
-│  │                                    │              │   │  │
-│  │                                    └──────┬───────┘   │  │
-│  │                                           │ reads/    │  │
-│  │                                           │ writes    │  │
-│  │                                           ▼           │  │
-│  │                                    ┌──────────────┐   │  │
-│  │                                    │              │   │  │
-│  │                                    │   engine/    │   │  │
-│  │                                    │              │   │  │
-│  │                                    │  Pure funcs. │   │  │
-│  │                                    │  Scoring,    │   │  │
-│  │                                    │  norms, etc. │   │  │
-│  │                                    │              │   │  │
-│  │                                    └──────────────┘   │  │
+│  │  │                  │               │  core/      │  │  │
+│  │  │                  │               │  members/   │  │  │
+│  │  └──────────────────┘               │             │  │  │
+│  │                                     │  Use Cases: │  │  │
+│  │   (SPA replaceable with            │  - Add      │  │  │
+│  │    CLI, future UIs)                │  - Get      │  │  │
+│  │                                     │  - Edit     │  │  │
+│  │                                     │  - Deact    │  │  │
+│  │                                     └──────┬─────┘  │  │
+│  │                                            │ depends │  │
+│  │                                            │ on port │  │
+│  │                                            ▼         │  │
+│  │                                    ┌──────────────┐  │  │
+│  │                                    │              │  │  │
+│  │                                    │  core/       │  │  │
+│  │                                    │  members/    │  │  │
+│  │                                    │              │  │  │
+│  │                                    │  PORT:       │  │  │
+│  │                                    │  Repository  │  │  │
+│  │                                    │  (interface) │  │  │
+│  │                                    │              │  │  │
+│  │                                    └──────┬───────┘  │  │
+│  │                                           │ impl     │  │
+│  │                    ┌──────────────────────┴──────────┐ │  │
+│  │                    ▼ (in-memory for tests)          ▼ │  │
+│  │            ┌──────────────────┐         ┌─────────────┐ │  │
+│  │            │ storage/memory/  │         │ storage/    │ │  │
+│  │            │ InMemory         │         │ sqlite/     │ │  │
+│  │            │ Repository       │         │ SQLite      │ │  │
+│  │            │ (test fixture)   │         │ Repository  │ │  │
+│  │            └──────────────────┘         │ (production)│ │  │
+│  │                                         │             │ │  │
+│  │                                         └──────┬──────┘ │  │
+│  │                                                │        │  │
+│  │                                    ┌──────────▼──────┐ │  │
+│  │                                    │                 │ │  │
+│  │                                    │  engine/        │ │  │
+│  │                                    │                 │ │  │
+│  │                                    │  Pure funcs.    │ │  │
+│  │                                    │  Scoring,       │ │  │
+│  │                                    │  norms, etc.    │ │  │
+│  │                                    │                 │ │  │
+│  │                                    └─────────────────┘ │  │
 │  │                                                      │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                         │                                   │
@@ -87,70 +90,216 @@ No external network connections. No cloud. No server. All data on-device.
 
 ## Containers
 
-### `server/` — HTTP Server & API Layer
+### `server/` — HTTP Adapter Layer
 - **Technology:** Go `net/http`, Go `html/template`, embedded static assets
 - **Responsibility:** Boot an HTTP server on localhost:8080; serve SPA static assets (HTML, CSS, JS); expose JSON REST API endpoints; handle request/response mapping.
-- **Handlers:** Receive HTTP requests, parse JSON/form data, call coordinators, map results to HTTP responses. No business logic in handlers; all logic delegated to coordinators.
-- **Constraints:** No direct store or engine access; no database connections. All persistence through coordinators and services.
+- **Handlers:** Receive HTTP requests, parse JSON/form data, call use cases via dependency injection, map results to HTTP responses. No business logic; all logic in core use cases.
+- **Constraints:** No direct store or engine access; no database connections. All persistence through injected use case dependencies.
 
 ### HTTP Handlers — Request/Response Adapter Pattern
 
 Each HTTP handler is a thin adapter:
 
 1. **Parse:** Extract JSON request body, path parameters, query strings into plain Go values
-2. **Validate:** Check request format (no business validation; business validation is in coordinator)
-3. **Delegate:** Call coordinator method with application-level inputs (not HTTP types)
-4. **Map errors:** Convert coordinator errors to HTTP status codes and error JSON
+2. **Validate:** Check request format (no business validation; business validation in use cases)
+3. **Delegate:** Call use case method with application-level inputs (not HTTP types)
+4. **Map errors:** Convert use case errors to HTTP status codes and error JSON
 5. **Serialize:** Convert result to JSON and write HTTP response
 
 **Example:** `HandlerAddMember` in `server/handler_members.go`:
 ```go
-func HandlerAddMember(w http.ResponseWriter, r *http.Request, coord *MemberAPICoordinator) {
+func HandlerAddMember(w http.ResponseWriter, r *http.Request, addUC AddMemberUC) {
   // Parse JSON request
   var req AddMemberRequest
   json.NewDecoder(r.Body).Decode(&req)
   
-  // Delegate to coordinator (business logic)
-  member, err := coord.AddMember(req.FirstName, req.LastName, req.Seniority)
+  // Delegate to use case (business logic)
+  output, err := addUC.Execute(AddMemberInput{
+    FirstName: req.FirstName,
+    LastName:  req.LastName,
+    Seniority: req.Seniority,
+  })
   
   // Map error to HTTP response
   if err != nil {
-    // error is of type coordinator.ValidationError
-    w.WriteHeader(http.StatusBadRequest) // or 500 for database errors
+    w.WriteHeader(http.StatusBadRequest)
     json.NewEncoder(w).Encode(map[string]interface{}{
-      "error": err.UserMessage(),
-      "kind":  err.Kind,
+      "error": err.Error(),
+      "kind":  "validation_error",
     })
     return
   }
   
   // Serialize success response
   w.WriteHeader(http.StatusCreated)
-  json.NewEncoder(w).Encode(map[string]interface{}{
-    "id":        memberIDToUUID(member.ID()),
-    "firstName": member.Name().First,
-    "lastName":  member.Name().Last,
-    "seniority": member.Seniority(),
-    "status":    "active",
-    "createdAt": member.CreatedAt().Format(time.RFC3339),
+  json.NewEncoder(w).Encode(MemberResponse{
+    ID:        memberIDToUUID(output.ID),
+    FirstName: output.FirstName,
+    LastName:  output.LastName,
+    Seniority: output.Seniority,
+    Status:    output.Status,
+    CreatedAt: output.CreatedAt.Format(time.RFC3339),
   })
 }
 ```
 
 **Characteristics:**
-- No conditional business logic (e.g., "if member is senior, discount the score")
-- No loops or loops over domain objects (that's the coordinator's job)
+- No conditional business logic
+- No loops or loops over domain objects
 - Typically 15–20 lines of code (parse, validate format, delegate, map error, serialize)
-- All coordination, validation, and computation in coordinator
-- Testable without HTTP: test the coordinator directly; test the handler with `httptest` and a mocked coordinator
+- All validation and computation in use cases
+- Testable without HTTP: test use cases directly; test handler with `httptest` and mocked use cases
 
-**Testing:** Use `net/http/httptest.NewRecorder()` to capture responses. Mock the coordinator with an in-memory mock struct. Verify HTTP status codes, JSON structure, and error messages.
+**Testing:** Use `net/http/httptest.NewRecorder()` to capture responses. Mock use cases with test doubles. Verify HTTP status codes, JSON structure, and error messages.
 
-### `service/coordinator/` — Orchestration Layer
+### `core/members/` — Application Layer (Business Logic)
+- **Technology:** Go (pure functions, no I/O, no framework dependencies)
+- **Responsibility:** Implement application use cases (AddMember, GetMembers, EditMember, DeactivateMember); validate business rules; orchestrate persistence via injected port interface.
+- **Key invariant:** Zero dependencies on storage, HTTP, or UI frameworks. Depends only on port abstractions and domain value objects.
+- **Use Cases:** Each implements `Execute(input) (*output, error)` pattern; injected repository port at construction.
+
+### `core/members/repository.go` — Port (Interface)
+- **Technology:** Go interface (abstract contract)
+- **Responsibility:** Define the contract for member persistence without implementation details.
+- **Methods:** `Save()`, `FindByID()`, `FindActive()`, `Deactivate()`
+- **Key rule:** Interface lives in core, implementations (adapters) live in `storage/`; adapters depend inward, never vice versa.
+
+### `storage/` — Adapter Layer
+- **Responsibility:** Implement the `MemberRepository` port for specific storage technologies.
+- **Implementation:** Two adapters provided:
+  - `storage/memory/`: In-memory map-based repository (test fixture, zero I/O)
+  - `storage/sqlite/`: SQLite repository (production storage, ACID compliance)
+- **Key invariant:** Each adapter implements the port interface; adapters depend on core, never vice versa.
+
+### `engine/` — Pure Computation Layer
 - **Technology:** Go (pure functions, no I/O)
-- **Responsibility:** Orchestrate multi-step workflows. Accept application-level inputs (member IDs, month strings, signal maps — not HTTP types). Validate, sequence service calls, handle cross-service dependencies, return domain error types.
-- **Coordinators:** `MonthlyInputCoordinator` (form state, data entry flow), `SettingsCoordinator` (member CRUD). Each coordinator is testable without HTTP or UI framework overhead.
-- **Dependency model:** Coordinators call services; they do not call store or engine directly. This enables reuse by HTTP handlers, CLI commands, and future UIs.
+- **Responsibility:** Scoring algorithms, norms, analysis logic. Shared value objects (Seniority, FullName, etc.)
+- **Note:** Unchanged by hexagonal refactor; remains a pure computation layer used by core and services.
+
+---
+
+## Dependency Architecture
+
+### Hexagonal (Ports & Adapters)
+
+```
+┌─────────────────────────────────────────────────────┐
+│                    HTTP (Adapter)                   │
+│              server/handler_members.go              │
+│                   ↓ (calls)                         │
+├─────────────────────────────────────────────────────┤
+│              CORE (Business Logic)                  │
+│            core/members/use_cases                   │
+│          • Aggregate (TeamMember)                   │
+│          • Port interface (MemberRepository)        │
+│          • Use cases (Add, Get, Edit, Deactivate)  │
+│          • Unit tests (inject in-memory adapter)   │
+│                   ↓ (depends on)                    │
+│      ┌──────────────────────────────────┐          │
+│      │ Port: MemberRepository           │          │
+│      │ (interface, zero impl logic)     │          │
+│      └──────────────────────────────────┘          │
+├─────────────────────────────────────────────────────┤
+│        ADAPTERS (Implementations)                   │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ storage/memory:      In-memory adapter       │  │
+│  │ storage/sqlite:      SQLite adapter          │  │
+│  │ ↑ (implements port)  ↑ (implements port)     │  │
+│  └──────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+
+Rules:
+• core/ has ZERO imports from storage/, server/, engine/, or service/
+• storage/ imports only from core/ (inbound only)
+• server/ imports only from core/ (inbound only)
+• No circular imports
+```
+
+### Wiring (Composition Root)
+
+```go
+// main.go: dependency injection at startup
+
+// 1. Create storage adapter (SQLite)
+repo := sqlite.NewSQLiteTeamMemberRepository(db)
+
+// 2. Create use cases with injected port
+addMemberUC := members.NewAddMemberUseCase(repo)
+getMembersUC := members.NewGetMembersUseCase(repo)
+editMemberUC := members.NewEditMemberUseCase(repo)
+deactivateMemberUC := members.NewDeactivateMemberUseCase(repo)
+
+// 3. Wire HTTP adapters with use cases
+mux.HandleFunc("POST /api/members", 
+  func(w http.ResponseWriter, r *http.Request) {
+    server.HandlerAddMember(w, r, addMemberUC)
+  })
+
+// 4. Start server
+http.ListenAndServe(":8080", mux)
+```
+
+---
+
+## Communication Paths
+
+| From | To | Protocol | Notes |
+|------|----|----------|-------|
+| Browser SPA | server/ | HTTP (localhost:8080) | JSON API |
+| server/ (handlers) | core/members/ (use cases) | Function calls (interfaces) | Dependency injection |
+| core/members/ (use cases) | MemberRepository port | Function calls (interface) | Adapter injected at composition root |
+| MemberRepository port | storage/{memory,sqlite}/ | Adapter implementations | SQLiteRepository for production; InMemoryRepository for tests |
+| storage/sqlite/ | SQLite database | SQL queries | ACID-compliant persistence |
+| core/ (any) | engine/ (value objects) | Function calls | FullName, Seniority, etc. (shared domain language) |
+
+---
+
+## Data Stores
+
+| Store | Type | Owned by | Purpose |
+|-------|------|----------|---------|
+| SQLite (data.db) | SQLite file | storage/sqlite/ | Persistent member data, monthly entries, audit log |
+| In-memory map | Go map[int64]*TeamMember | storage/memory/ | Test fixture; no persistence |
+
+---
+
+## Key Constraints
+
+- **No external network:** All computation local to single binary
+- **Single binary:** Go application; database is a file (SQLite)
+- **Hexagonal boundaries:** Core business logic is infrastructure-agnostic
+- **Dependency inversion:** Dependencies point inward (HTTP → core ← storage); core depends on abstractions (ports), not implementations (adapters)
+- **No framework bloat:** No ORM, no DI container, no reflection; explicit wiring in main.go
+- **Testability:** Core use cases testable in milliseconds with in-memory adapter; no database setup required
+
+---
+
+## Out of Scope
+
+- Internal component structure of each container (C4 Level 3)
+- Deployment topology
+- CI/CD pipeline
+- Monthly entry operations (separate container; uses similar hexagonal pattern)
+
+---
+
+## Update Policy
+
+Update this file when:
+- A container is added, removed, or its technology changes
+- A communication path between containers changes
+- A new external system dependency is added
+- A critical constraint changes
+
+Do NOT update for internal refactors, new features within an existing container, or test changes.
+
+**Last updated:** 2026-09-16 — Hexagonal architecture (ports & adapters) implemented for member CRUD; coordinator pattern replaced by use cases with explicit port dependencies.
+
+---
+
+## Architecture Decision
+
+See [ADR-20260916 — Hexagonal Architecture (Ports & Adapters) for Member CRUD](./adr/ADR-20260916-hexagonal-architecture-member-crud.md) for the decision rationale, alternatives considered, and consequences.
 - **Key constraint:** Stateless per HTTP request (or CLI invocation). No member variables that persist across calls except service references.
 
 ### `service/` — Application Use Case Layer
