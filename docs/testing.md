@@ -40,14 +40,23 @@ The system has four layers with different risk profiles:
 - A query aggregates or joins data across months or members.
 - Soft-delete, audit trail, or constraint logic is added.
 
+**HTTP handler tests (JSON API and SPA screens):** Write when:
+- A new API endpoint is added (JSON API).
+- A new SPA screen page is added (`/members`, `/members/add`, `/members/{id}/edit`, etc.).
+- A handler's logic changes (use case delegation, response mapping, error handling).
+- A form submission handler is added (validation, redirect, error re-rendering).
+
 **UI manual verification:** Required when:
 - A screen is added or its layout changes.
 - A new interaction pattern is introduced (e.g., new form, new table, new dialog).
+- JavaScript interactivity is added (AJAX, form validation, dynamic DOM updates).
+- Responsive breakpoint behavior changes.
+- Accessibility features change (keyboard nav, focus outlines, ARIA labels, color contrast).
 - See acceptance criteria in `.agent/increment.md` for manual test scenarios.
 
 **No new test needed when:**
 - Renaming a variable or extracting a helper with identical behavior.
-- Changing UI colors, fonts, or widget positioning (not behavior).
+- Changing UI colors, fonts, or widget positioning (not behavior) in inline CSS.
 - Adding a log statement or comment.
 
 ---
@@ -100,36 +109,86 @@ The system has four layers with different risk profiles:
 - Cover happy path and constraint violations (foreign keys, NOT NULL, unique constraints).
 - **Standard helper: `setupTestDB()`** — initializes an in-memory SQLite database with the full schema applied. All store tests must call `setupTestDB()` before creating fixtures. This ensures test isolation and consistent schema versioning across all tests. See `store/member_test.go` for the reference implementation.
 
-**HTTP handler tests:**
+**HTTP handler tests (JSON API):**
 - Live in `server/<file>_test.go` (e.g., `server/handler_members_test.go`).
 - Use `net/http/httptest.NewRecorder()` to capture HTTP responses without starting a real server.
 - Use hand-written mock coordinators (mock struct implementing the coordinator interface) — no mocking library overhead.
 - Each test: mock the coordinator, create an HTTP request, call the handler, verify HTTP status code and JSON response body.
-- Cover success case and all error cases: validation errors (400), not-found (400), database failures (500).
+- Cover success case and all error cases: validation errors (400), not-found (404), database failures (500).
 - Handler tests are fast (no database access, no I/O), isolated (each test mocks its dependencies), and independent of other handler tests.
 - **Canonical pattern:**
-  ```go
-  // Mock coordinator with test fixture
-  mockCoord := &MockMemberAPICoordinator{
-    members: []domain.TeamMember{ /* fixture */ },
-    err:     nil, // or an error for error cases
-  }
+   ```go
+   // Mock coordinator with test fixture
+   mockCoord := &MockMemberAPICoordinator{
+     members: []domain.TeamMember{ /* fixture */ },
+     err:     nil, // or an error for error cases
+   }
 
-  // Create HTTP request
-  req := httptest.NewRequest("GET", "/api/members", nil)
-  w := httptest.NewRecorder()
+   // Create HTTP request
+   req := httptest.NewRequest("GET", "/api/members", nil)
+   w := httptest.NewRecorder()
 
-  // Call handler
-  HandlerGetMembers(w, req, mockCoord)
+   // Call handler
+   HandlerGetMembers(w, req, mockCoord)
 
-  // Verify HTTP response
-  if w.Code != http.StatusOK {
-    t.Errorf("expected 200, got %d", w.Code)
-  }
-  var resp map[string][]interface{}
-  json.NewDecoder(w.Body).Decode(&resp)
-  // Assert response structure and data
-  ```
+   // Verify HTTP response
+   if w.Code != http.StatusOK {
+     t.Errorf("expected 200, got %d", w.Code)
+   }
+   var resp map[string][]interface{}
+   json.NewDecoder(w.Body).Decode(&resp)
+   // Assert response structure and data
+   ```
+
+**Server-rendered template tests (SPA screens):**
+- Live in `server/<file>_test.go` (e.g., `server/handler_members_test.go`).
+- **Approach:** Each SPA screen handler is tested by mocking the use case, executing the handler, and verifying the HTML output (status code, template rendering, presence of expected elements).
+- Use `net/http/httptest.NewRecorder()` to capture HTML responses without starting a real server.
+- Use hand-written mock use cases (mock struct implementing the use case interface) — no mocking library overhead.
+- **Layers tested:**
+  - **Handler layer:** Unit tests mock use cases and verify handler correctly calls the use case, maps output to template data, and renders the template. Verify HTTP status codes and HTML output.
+  - **Template layer:** Verify HTML structure (semantic tags, form fields, links, buttons) by parsing response body with `html/template` or string matching. No browser or Playwright needed for unit tests.
+  - **Accessibility layer:** Verify semantic HTML (form labels, button aria-labels, heading hierarchy) and CSS (inline or media queries). Manual browser verification for keyboard navigation, focus outlines, color contrast.
+  - **Responsive layout:** Verify CSS media queries in templates via code inspection. Manual browser verification at three viewport sizes (desktop ≥1024px, tablet 769–1023px, mobile ≤768px).
+- **What is NOT tested automatically:**
+  - JavaScript interactivity (AJAX deactivate, form validation). Tested manually via browser or Playwright end-to-end tests (v2+).
+  - Dynamic CSS rendering. Templates use static inline CSS; no CSS-in-JS framework.
+- **Canonical pattern for SPA screen handler tests:**
+   ```go
+   // Mock use case with test fixture
+   mockUC := &MockGetMembersUseCase{
+     members: []domain.TeamMember{ /* fixture */ },
+     err:     nil, // or an error for error cases
+   }
+
+   // Create HTTP request
+   req := httptest.NewRequest("GET", "/members", nil)
+   w := httptest.NewRecorder()
+
+   // Call handler
+   HandlerGetMembersPage(w, req, mockUC)
+
+   // Verify HTTP response and HTML structure
+   if w.Code != http.StatusOK {
+     t.Errorf("expected 200, got %d", w.Code)
+   }
+   body := w.Body.String()
+   
+   // Verify HTML contains expected elements
+   if !strings.Contains(body, "<table") {
+     t.Error("expected table element in HTML")
+   }
+   if !strings.Contains(body, "John") {
+     t.Error("expected member name in HTML")
+   }
+   if !strings.Contains(body, "href=\"/members/1/edit\"") {
+     t.Error("expected edit link for member")
+   }
+   
+   // For error cases, verify error message or fallback HTML
+   ```
+- **For form handlers (POST/PATCH):** Test form parsing, validation error handling (re-render form with error message), and success redirect behavior separately from template rendering.
+- **Coverage goal:** All SPA screen handlers have unit tests that prove correct use case delegation, HTML output, and error handling. Template files are the source of truth for styling and layout; code tests verify structure only.
 
 **All tests:**
 - Must not share mutable state. Each test case sets up its own fixtures.
