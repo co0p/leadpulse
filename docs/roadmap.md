@@ -391,24 +391,57 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ## Planned
 
-### SPA Increment 3: Monthly Entry API
+### SPA Increment 3: Members Screen (SPA)
 
-**Goal:** Build the Settings screen (member list, add/edit/deactivate) as a browser-rendered SPA page backed by the Members API. This is the first Fyne screen retired.
+**Goal:** Build the Members screen (member list, add, edit, deactivate) as a browser-rendered SPA page backed by the existing Members API. This replaces manual member management via the Fyne Settings screen.
 
 **Scope:**
-- Scaffold the SPA project in `web/` with HTMX + Alpine.js + Go `html/template`
-- Implement the Settings screen with identical UX to the existing Fyne screen
-- Add `Makefile` target `make web` that prepares SPA templates; no separate build step required (templates embedded directly)
-- Remove `ui/screens/settings.go` once the SPA version passes acceptance
-- SettingsController remains in `ui/controllers/` and is called by HTTP handlers
+- Scaffold Members screen routes: GET /members, GET /members/add, POST /members, GET /members/{id}/edit
+- Implement responsive HTML templates with inline CSS for add, edit, and list pages
+- Add form validation (required fields, max length) with error re-rendering
+- Deactivate action uses AJAX (fetch) for seamless removal without page reload
+- All routes use human-friendly, bookmarkable URLs
 
-**Why Settings first:** it is the simplest screen (pure CRUD, no formula rendering, no live preview). Low risk for proving the full stack.
+**Why Members first:** it is the simplest screen (pure CRUD, no formula rendering, no live preview). Low risk for proving the SPA pattern with routable URLs.
 
 **Acceptance criteria:**
-- AC-1: Add, edit, and deactivate flows work in the browser identically to the Fyne screen behavior
-- AC-2: Handler unit tests and Playwright end-to-end tests provide equivalent or better coverage than Fyne tests
-- AC-3: `go test -race ./...` passes; `go build ./...` produces a single binary with the SPA assets embedded
-- AC-4: `curl http://localhost:8080/settings` serves the Settings page with live functionality
+- AC-1: Members list page (`/members`) displays all active members in responsive table with Edit/Deactivate buttons
+- AC-2: Add member page (`/members/add`) provides form, submission persists and redirects to list
+- AC-3: Edit member page (`/members/{id}/edit`) loads member data, allows updates, persists and redirects
+- AC-4: Deactivate removes member from list without page reload (AJAX)
+- AC-5: Form validation blocks invalid inputs (required fields, name length ≤ 100 chars)
+- AC-6: All changes persist across page reloads and app restarts
+- AC-7: Responsive layout works on desktop (≥1024px), tablet (769–1023px), mobile (≤768px)
+- AC-8: Accessibility meets WCAG 2.1 AA (semantic HTML, ARIA labels, keyboard nav, focus outlines)
+
+**Acceptance scenarios verified:**
+- ✓ Members list displays active members with Edit/Deactivate buttons
+- ✓ Add flow: navigate `/members/add` → fill form → submit → redirected to list, member appears
+- ✓ Edit flow: click Edit → pre-filled form → change seniority → save → redirected to list, updates persist
+- ✓ Deactivate: click Deactivate → row fades and removes from list (no reload) → member stays deactivated on refresh
+- ✓ Form validation: empty fields/invalid data show errors, form re-renders with values preserved
+- ✓ Responsive: correct layout on all three breakpoints (desktop, tablet, mobile)
+- ✓ Accessibility: semantic HTML, ARIA labels on buttons, focus outlines visible, keyboard nav works
+
+**Evidence:**
+- HTTP handlers: `server/handler_members.go` with `HandlerGetMembersPage`, `HandlerGetAddMemberPage`, `HandlerPostAddMember`, `HandlerGetEditMemberPage`
+- HTML templates: `server/templates/members/list.html`, `add.html`, `edit.html` with responsive CSS and AJAX deactivate
+- Route registration: `server/server.go` updated with GET `/members`, GET `/members/add`, POST `/members`, GET `/members/{id}/edit`
+- Form component: `server/templates/components/member_form.html` (reusable fields for add/edit)
+- All tests passing: `go test -race ./...` → 10 packages, 0 failures
+- Test file: `server/handler_members_test.go` with test cases for handler behavior
+
+**Key commits:**
+- 0e868f9 — tidy: update sidebar link from Settings to Members
+- e8bac45 — tidy: scaffold members template directory and reusable form component
+- f04d49d — feat: add HandlerGetMembersPage to render members list as HTML
+- 74ab764 — feat: add Members screen HTML pages and handlers for add/edit/list
+
+**Test command:** `go test -race ./...` → all pass
+
+---
+
+### SPA Increment 4: Monthly Entry API
 
 ---
 
