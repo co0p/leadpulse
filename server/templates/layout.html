@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Team Impact Scorecard</title>
+    
+    <!-- Bulma CSS -->
+    <link rel="stylesheet" href="/dist/css/bulma.min.css">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Shell styles -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .topbar {
+            height: 56px;
+            background-color: #fff;
+            border-bottom: 1px solid #e8e8e8;
+            display: flex;
+            align-items: center;
+            padding: 0 1.25rem;
+            gap: 1rem;
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            min-width: 200px;
+        }
+
+        .topbar-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            min-width: 0;
+        }
+
+        .topbar-center .field {
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            min-width: 120px;
+        }
+
+        .sidebar {
+            width: 260px;
+            background-color: #f5f5f5;
+            border-right: 1px solid #e8e8e8;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            flex-shrink: 0;
+            z-index: 5;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem 1.25rem;
+            border-bottom: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header .logo h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin: 0;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+
+        .menu-list {
+            list-style: none;
+            padding: 0 0.5rem;
+        }
+
+        .menu-list li {
+            margin: 0;
+        }
+
+        .menu-list a {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: #4a4a4a;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .menu-list a:hover {
+            background-color: #ebebeb;
+        }
+
+        .menu-list a:focus {
+            outline: 2px solid #3273dc;
+            outline-offset: 2px;
+        }
+
+        .sidebar-section {
+            padding: 1rem 0.5rem;
+            border-top: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+
+        .menu-label {
+            font-size: 0.85rem;
+            color: #7a7a7a;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 1rem;
+            margin: 0.5rem 0;
+        }
+
+        .sidebar-footer {
+            padding: 1rem 0.5rem;
+            border-top: 1px solid #e8e8e8;
+            flex-shrink: 0;
+        }
+
+        .sidebar-footer .button {
+            font-size: 0.9rem;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            background-color: #fafafa;
+        }
+
+        .main-content .section {
+            padding: 1rem 1.25rem;
+        }
+
+        .main-content .container {
+            margin: 0;
+            max-width: none;
+            width: 100%;
+        }
+
+        .breadcrumb-area {
+            display: flex;
+            align-items: center;
+            font-size: 0.95rem;
+            color: #7a7a7a;
+        }
+
+        .sidebar-toggle {
+            padding: 0.5rem;
+            min-width: 44px;
+        }
+
+        .sidebar-toggle:focus {
+            outline: 2px solid #3273dc;
+            outline-offset: 2px;
+        }
+
+        .button:focus {
+            outline: 2px solid #3273dc;
+            outline-offset: 2px;
+        }
+
+        .input:focus {
+            outline: 2px solid #3273dc;
+            outline-offset: 2px;
+            border-color: #3273dc;
+        }
+
+        /* Responsive */
+        @media screen and (max-width: 1023px) {
+            .sidebar {
+                position: absolute;
+                left: 0;
+                top: 56px;
+                height: calc(100vh - 56px);
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            }
+
+            .sidebar.is-active {
+                transform: translateX(0);
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: absolute;
+                top: 56px;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(0,0,0,0.5);
+                z-index: 4;
+            }
+
+            .sidebar-overlay.is-active {
+                display: block;
+            }
+        }
+
+        @media screen and (max-width: 767px) {
+            .topbar {
+                padding: 0 0.75rem;
+                gap: 0.5rem;
+            }
+
+            .topbar-center .field {
+                max-width: 200px;
+            }
+
+            .topbar-center .input {
+                font-size: 14px;
+            }
+
+            .topbar-right .buttons {
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .topbar-right .button {
+                padding: 0.5rem;
+                min-width: auto;
+            }
+
+            .main-content .section {
+                padding: 0.75rem;
+            }
+
+            .breadcrumb-area {
+                font-size: 0.85rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="topbar" role="banner">
+        <div class="topbar-left">
+            <button class="button is-white sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="false" data-toggle="sidebar">
+                <span class="icon">
+                    <i class="fas fa-bars"></i>
+                </span>
+            </button>
+            <div class="breadcrumb-area">
+                <span class="breadcrumb-text">Dashboard</span>
+            </div>
+        </div>
+
+        <div class="topbar-center">
+            <div class="field has-addons is-fullwidth">
+                <p class="control is-expanded has-icons-left">
+                    <input class="input" type="text" placeholder="Search..." aria-label="Search members and content">
+                    <span class="icon is-left">
+                        <i class="fas fa-search"></i>
+                    </span>
+                </p>
+            </div>
+        </div>
+
+        <div class="topbar-right">
+            <div class="buttons">
+                <button class="button is-ghost" type="button" aria-label="Notifications" title="Notifications">
+                    <span class="icon">
+                        <i class="fas fa-bell"></i>
+                    </span>
+                </button>
+                <button class="button is-ghost" type="button" aria-label="Help" title="Help">
+                    <span class="icon">
+                        <i class="fas fa-question-circle"></i>
+                    </span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <aside class="sidebar" role="navigation">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <h2>Leadpulse</h2>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <ul class="menu-list">
+                    <li><a href="/" tabindex="0">Home</a></li>
+                    <li><a href="/settings" tabindex="0">Settings</a></li>
+                    <li><a href="/alerts" tabindex="0">Alerts</a></li>
+                    <li><a href="/reports" tabindex="0">Reports</a></li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-section">
+                <p class="menu-label">Tools</p>
+                <ul class="menu-list">
+                    <li><a href="#tools" tabindex="0">Tool 1</a></li>
+                    <li><a href="#tools" tabindex="0">Tool 2</a></li>
+                </ul>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="button is-fullwidth is-primary" type="button">
+                    <span class="icon-text">
+                        <span class="icon"><i class="fas fa-plus"></i></span>
+                        <span>Add Item</span>
+                    </span>
+                </button>
+            </div>
+        </aside>
+
+        <div class="sidebar-overlay" role="presentation"></div>
+
+        <main class="main-content" role="main">
+            <section class="section">
+                <div class="container">
+                    <div class="level">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <h1 class="title">Welcome to Team Impact Scorecard</h1>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="box">
+                        <p>The web app shell is ready. More screens coming soon...</p>
+                    </div>
+
+                    <div class="level">
+                        <div class="level-left">
+                            <div class="level-item">
+                                <button class="button is-primary" type="button">Primary Action</button>
+                            </div>
+                            <div class="level-item">
+                                <button class="button" type="button">Secondary Action</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- HTMX -->
+    <script src="/dist/js/htmx.min.js"></script>
+    
+    <!-- Alpine.js -->
+    <script src="/dist/js/alpine.min.js" defer></script>
+</body>
+</html>
