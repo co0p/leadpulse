@@ -3,18 +3,19 @@ package server
 import (
 	"embed"
 	"fmt"
+	"html/template"
 	"io/fs"
 	"net/http"
 	"strconv"
 )
 
 // Assets holds the embedded web directory.
-//go:embed dist
+//go:embed dist templates
 var Assets embed.FS
 
 // Start boots the HTTP server on the given address.
-// It serves static assets from the embedded FS under dist/.
-// It also registers API endpoints for team member CRUD operations.
+// It serves the shell template on /, static assets from the embedded FS under /dist/,
+// and registers API endpoints for team member CRUD operations.
 // The function blocks indefinitely while the server runs.
 func Start(addr string, addMemberUC AddMemberUC, getMembersUC GetMembersUC, editMemberUC EditMemberUC, deactivateMemberUC DeactivateMemberUC) error {
 	mux := http.NewServeMux()
@@ -52,15 +53,29 @@ func Start(addr string, addMemberUC AddMemberUC, getMembersUC GetMembersUC, edit
 		})
 	}
 
+	// Parse shell template
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		return fmt.Errorf("failed to parse shell template: %w", err)
+	}
+
+	// Root handler: serve shell template
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tmpl.Execute(w, nil); err != nil {
+			http.Error(w, fmt.Sprintf("Template error: %v", err), http.StatusInternalServerError)
+		}
+	})
+
 	// Extract the dist subdirectory from the embedded FS
 	distFS, err := fs.Sub(Assets, "dist")
 	if err != nil {
 		return fmt.Errorf("failed to extract dist directory from embedded FS: %w", err)
 	}
 
-	// Serve embedded assets with a root index handler
+	// Serve static assets from /dist/
 	fileServer := http.FileServer(http.FS(distFS))
-	mux.Handle("/", fileServer)
+	mux.Handle("/dist/", http.StripPrefix("/dist/", fileServer))
 
 	server := &http.Server{
 		Addr:    addr,
