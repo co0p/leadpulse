@@ -268,10 +268,10 @@
         }
     </style>
 </head>
-<body>
+<body x-data="shellState()" @keydown.escape="closeSidebar()">
     <div class="topbar" role="banner">
         <div class="topbar-left">
-            <button class="button is-white sidebar-toggle" type="button" aria-label="Toggle sidebar" aria-expanded="false" data-toggle="sidebar">
+            <button class="button is-white sidebar-toggle" type="button" aria-label="Toggle sidebar" :aria-expanded="sidebarOpen" @click="toggleSidebar()">
                 <span class="icon">
                     <i class="fas fa-bars"></i>
                 </span>
@@ -284,7 +284,7 @@
         <div class="topbar-center">
             <div class="field has-addons is-fullwidth">
                 <p class="control is-expanded has-icons-left">
-                    <input class="input" type="text" placeholder="Search..." aria-label="Search members and content">
+                    <input class="input" type="text" placeholder="Search..." aria-label="Search members and content" @focus="searchFocused = true" @blur="searchFocused = false">
                     <span class="icon is-left">
                         <i class="fas fa-search"></i>
                     </span>
@@ -309,7 +309,7 @@
     </div>
 
     <div class="app-container">
-        <aside class="sidebar" role="navigation">
+        <aside class="sidebar" :class="{ 'is-active': sidebarOpen }" role="navigation">
             <div class="sidebar-header">
                 <div class="logo">
                     <h2>Leadpulse</h2>
@@ -343,7 +343,7 @@
             </div>
         </aside>
 
-        <div class="sidebar-overlay" role="presentation"></div>
+        <div class="sidebar-overlay" :class="{ 'is-active': sidebarOpen }" role="presentation" @click="closeSidebar()"></div>
 
         <main class="main-content" role="main">
             <section class="section">
@@ -380,5 +380,38 @@
     
     <!-- Alpine.js -->
     <script src="/dist/js/alpine.min.js" defer></script>
+
+    <!-- Shell state and interactivity -->
+    <script>
+        function shellState() {
+            return {
+                sidebarOpen: window.innerWidth >= 1024,
+                searchFocused: false,
+
+                toggleSidebar() {
+                    if (window.innerWidth < 1024) {
+                        this.sidebarOpen = !this.sidebarOpen;
+                    }
+                },
+
+                closeSidebar() {
+                    if (window.innerWidth < 1024) {
+                        this.sidebarOpen = false;
+                    }
+                },
+
+                init() {
+                    // Update sidebar state on window resize
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth >= 1024) {
+                            this.sidebarOpen = true;
+                        } else {
+                            this.sidebarOpen = false;
+                        }
+                    });
+                }
+            };
+        }
+    </script>
 </body>
 </html>
