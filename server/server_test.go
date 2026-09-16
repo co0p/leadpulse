@@ -154,6 +154,281 @@ func TestHandlerNoFyneImports(t *testing.T) {
 	t.Log("server package has no Fyne imports")
 }
 
+// Acceptance tests for Web App Shell (AC-1 through AC-7)
+
+// TestShellRendersFullLayout verifies shell renders with all 3 semantic regions
+func TestShellRendersFullLayout(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !contains(body, "<header") || !contains(body, "<aside") || !contains(body, "<main") {
+		t.Error("shell missing semantic regions (header, aside, main)")
+	}
+	if !contains(body, "height: 100vh") {
+		t.Error("layout missing full-height CSS")
+	}
+}
+
+// TestSidebarComponentRenders verifies sidebar contains expected elements
+func TestSidebarComponentRenders(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !contains(body, "Leadpulse") {
+		t.Error("sidebar missing logo/branding")
+	}
+	if !contains(body, "Home") || !contains(body, "Settings") {
+		t.Error("sidebar missing nav links")
+	}
+	if !contains(body, "Tools") {
+		t.Error("sidebar missing collapsible section")
+	}
+	if !contains(body, "Add Item") {
+		t.Error("sidebar missing footer button")
+	}
+}
+
+// TestTopBarComponentRenders verifies top bar contains expected elements
+func TestTopBarComponentRenders(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !contains(body, "sidebar-toggle") {
+		t.Error("top bar missing toggle button")
+	}
+	if !contains(body, "Dashboard") {
+		t.Error("top bar missing breadcrumb/context")
+	}
+	if !contains(body, `placeholder="Search..."`) {
+		t.Error("top bar missing search input")
+	}
+	if !contains(body, "fa-bell") || !contains(body, "fa-question-circle") {
+		t.Error("top bar missing quick action buttons")
+	}
+}
+
+// TestContentAreaRenders verifies main content area exists and is scrollable
+func TestContentAreaRenders(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !contains(body, "main-content") {
+		t.Error("content area missing main-content class")
+	}
+	if !contains(body, "overflow-y: auto") {
+		t.Error("content area not scrollable")
+	}
+	if !contains(body, "Welcome to Team Impact Scorecard") {
+		t.Error("content area missing placeholder content")
+	}
+}
+
+// TestBulmaCSSLoadsWithout404 verifies Bulma CSS is accessible
+func TestBulmaCSSLoadsWithout404(t *testing.T) {
+	distFS, err := fs.Sub(Assets, "dist")
+	if err != nil {
+		t.Fatalf("failed to extract dist: %v", err)
+	}
+
+	fileServer := http.FileServer(http.FS(distFS))
+	req := httptest.NewRequest("GET", "/css/bulma.min.css", nil)
+	w := httptest.NewRecorder()
+	fileServer.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /css/bulma.min.css returned %d, expected 200", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType == "" || !contains(contentType, "css") {
+		t.Errorf("CSS content-type is %q, expected to contain 'css'", contentType)
+	}
+
+	if w.Body.Len() == 0 {
+		t.Error("Bulma CSS file is empty")
+	}
+}
+
+// TestHTMXLoadsWithout404 verifies HTMX JS is accessible
+func TestHTMXLoadsWithout404(t *testing.T) {
+	distFS, err := fs.Sub(Assets, "dist")
+	if err != nil {
+		t.Fatalf("failed to extract dist: %v", err)
+	}
+
+	fileServer := http.FileServer(http.FS(distFS))
+	req := httptest.NewRequest("GET", "/js/htmx.min.js", nil)
+	w := httptest.NewRecorder()
+	fileServer.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /js/htmx.min.js returned %d, expected 200", w.Code)
+	}
+
+	if w.Body.Len() == 0 {
+		t.Error("HTMX JS file is empty")
+	}
+}
+
+// TestAlpineLoadsWithout404 verifies Alpine.js is accessible
+func TestAlpineLoadsWithout404(t *testing.T) {
+	distFS, err := fs.Sub(Assets, "dist")
+	if err != nil {
+		t.Fatalf("failed to extract dist: %v", err)
+	}
+
+	fileServer := http.FileServer(http.FS(distFS))
+	req := httptest.NewRequest("GET", "/js/alpine.min.js", nil)
+	w := httptest.NewRecorder()
+	fileServer.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /js/alpine.min.js returned %d, expected 200", w.Code)
+	}
+
+	if w.Body.Len() == 0 {
+		t.Error("Alpine JS file is empty")
+	}
+}
+
+// TestResponsiveBreakpointsMetaTag verifies meta viewport tag for responsive design
+func TestResponsiveBreakpointsMetaTag(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !contains(body, `<meta name="viewport"`) || !contains(body, `width=device-width`) {
+		t.Error("meta viewport tag missing or incomplete")
+	}
+}
+
+// TestAccessibilitySemanticRegions verifies exactly 1 each of header, aside, main
+func TestAccessibilitySemanticRegions(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	headerCount := countOccurrences(body, "<header")
+	asideCount := countOccurrences(body, "<aside")
+	mainCount := countOccurrences(body, "<main")
+
+	if headerCount != 1 {
+		t.Errorf("expected 1 <header>, found %d", headerCount)
+	}
+	if asideCount != 1 {
+		t.Errorf("expected 1 <aside>, found %d", asideCount)
+	}
+	if mainCount != 1 {
+		t.Errorf("expected 1 <main>, found %d", mainCount)
+	}
+}
+
+// TestAccessibilityAriaExpandedOnToggle verifies sidebar toggle has aria-expanded
+func TestAccessibilityAriaExpandedOnToggle(t *testing.T) {
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
+	if err != nil {
+		t.Fatalf("failed to parse template: %v", err)
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		tmpl.Execute(w, nil)
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	if !contains(body, "aria-expanded") {
+		t.Error("sidebar toggle missing aria-expanded attribute")
+	}
+	if !contains(body, `aria-label="Toggle sidebar"`) {
+		t.Error("sidebar toggle missing aria-label")
+	}
+}
+
 // contains is a helper to check if a string contains a substring.
 func contains(s, substr string) bool {
 	for i := 0; i < len(s)-len(substr)+1; i++ {
@@ -162,4 +437,16 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// countOccurrences counts how many times a substring appears in a string
+func countOccurrences(s, substr string) int {
+	count := 0
+	for i := 0; i < len(s)-len(substr)+1; i++ {
+		if s[i:i+len(substr)] == substr {
+			count++
+			i += len(substr) - 1
+		}
+	}
+	return count
 }
