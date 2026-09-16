@@ -1,791 +1,679 @@
-# Plan: Hexagonal Architecture for Member CRUD
+# Plan: Members Screen SPA
 
 ## Goal
 
-Refactor member CRUD to follow Ports & Adapters (Hexagonal Architecture): move business logic to infrastructure-independent `core/members/` packages (domain aggregates + ports), implement ports as storage adapters in `storage/` (in-memory and SQLite), replace `MemberAPICoordinator` with explicit use cases, and achieve true separation of concerns with zero core dependencies on infrastructure.
+Build the Members screen as a browser-rendered SPA page with human-friendly URLs, backed by the existing Members API, replacing the Fyne Settings screen for member management.
 
 ## Branch
 
-`increment/clean-architecture-member-crud`
+`increment/members-screen-spa`
 
 ## Approach
 
-Move member aggregates and business logic into a new `core/members/` package that is completely independent of HTTP, database technology, and UI frameworks. Define ports (interfaces) as contract boundaries in `core/members/repository.go`. Implement ports as adapters in `storage/memory/` and `storage/sqlite/` that depend inward on core only. Create four use case classes (AddMemberUseCase, GetMembersUseCase, EditMemberUseCase, DeactivateMemberUseCase) in `core/members/` that orchestrate domain operations and call the injected repository port. Refactor `server/handler_members.go` to call use cases directly instead of the coordinator. Remove `service/coordinator/member_api.go` entirely. Composition root wiring moves to `main.go` where adapters are instantiated and injected into use cases.
-
-This achieves hexagonal separation: core has zero imports from adapters; adapters depend inward on core only. Business logic is fully testable with in-memory adapters; portable to CLI, gRPC, or other clients without change to core logic.
+The Members screen introduces server-side rendered (SSR) HTML pages via Go templates. Each route (`/members`, `/members/add`, `/members/{id}/edit`) serves a distinct HTML page embedded in the binary. The HTTP handlers remain thin adapters — they load data via existing use cases, pass the data to Go templates, and render the response. Form submissions POST to the existing `/api/members` JSON endpoints; on success, the response triggers a redirect via HTML or client-side JavaScript. No new business logic; all validation and persistence already in core use cases. Performance remains sub-200ms (per CONSTITUTION envelope) because queries and use case execution are unchanged.
 
 ## Design
 
 ### Data Models
 
-**Core types (moved/referenced from `engine/domain/aggregates.go`):**
+No new domain models. The Members screen renders existing `TeamMember` aggregate from `core/members/member.go`.
 
-```
-TeamMember (aggregate root)
-  id:            TeamMemberID (int64)
-  name:          FullName { First string, Last string }
-  seniority:     Seniority (enum: Junior, Mid, Senior, Lead, Principal)
-  createdAt:     time.Time (immutable)
-  deactivatedAt: *time.Time (nil if active)
-  methods:
-    - ID() TeamMemberID
-    - Name() FullName
-    - Seniority() Seniority
-    - CreatedAt() time.Time
-    - IsActive() bool
-    - DeactivatedAt() *time.Time
-    - Deactivate() error
-    - ChangeSeniority(newSeniority Seniority) error
-    - UpdateName(firstName, lastName string) error  [new for edit use case]
-```
+**HTTP Request/Response additions:**
+- `members/get_members.go` already returns `GetMembersOutput` (list of active members)
+- `members/add_member.go` already returns `AddMemberOutput` (created member with ID)
+- `members/edit_member.go` already returns `EditMemberOutput` (updated member)
+- `members/deactivate_member.go` already returns `DeactivateMemberOutput` (success or error)
 
-**Port interface (new in `core/members/repository.go`):**
+**Template data models:**
+```go
+// Used in Go templates for rendering
+type MembersListPageData struct {
+  Members []MemberForDisplay  // Active members only
+}
 
-```
-MemberRepository interface
-  - Save(member *Member) error
-  - FindByID(id TeamMemberID) (*Member, error)
-  - FindActive() ([]*Member, error)
-  - Deactivate(id TeamMemberID) error
-```
-
-**Use case input/output structs (new in `core/members/`):**
-
-```
-AddMemberInput
+type MemberForDisplay struct {
+  ID        string  // UUID (for href)
   FirstName string
   LastName  string
   Seniority string
+}
 
-AddMemberOutput
-  ID        int64
-  FirstName string
-  LastName  string
-  Seniority string
-  Status    string (Active/Inactive)
-  CreatedAt time.Time
+type AddMemberPageData struct {
+  // Empty on GET; used to render form
+}
 
-GetMembersOutput
-  Members []MemberDTO where MemberDTO has same fields as AddMemberOutput
-
-EditMemberInput
-  MemberID  int64
-  FirstName string (optional, "" means no change)
-  LastName  string (optional)
-  Seniority string (optional)
-
-EditMemberOutput
-  ID        int64
-  FirstName string
-  LastName  string
-  Seniority string
-  Status    string
-  CreatedAt time.Time
-
-DeactivateMemberInput
-  MemberID int64
-
-DeactivateMemberOutput
-  Success bool
+type EditMemberPageData struct {
+  Member MemberForDisplay
+}
 ```
+
+These are template-local types, not domain objects; they reside in `server/templates/` and are not persisted.
 
 ### Call / Data Flow
 
-**AddMemberUseCase.Execute(input)**
-1. Validate input (firstName, lastName non-empty; seniority valid)
-2. Create new TeamMember aggregate via domain constructor
-3. Call repo.Save(member) to persist
-4. On success, generate new UUID for external API representation (v5 with namespace)
-5. Return AddMemberOutput
+**GET /members (list):**
+1. HTTP handler receives GET request
+2. Calls `GetMembersUC.Execute()` → returns `GetMembersOutput` (list of active members)
+3. Maps `GetMembersOutput` members to template data (convert int64 ID to UUID string)
+4. Executes `server/templates/members/list.html` with data
+5. Returns rendered HTML
 
-**GetMembersUseCase.Execute()**
-1. Call repo.FindActive() to load all active members
-2. Map each TeamMember to MemberDTO
-3. Convert internal IDs to UUIDs
-4. Return GetMembersOutput with member list
+**GET /members/add (add form):**
+1. HTTP handler receives GET request
+2. Executes `server/templates/members/add.html` with empty data (form only, no API call needed)
+3. Returns rendered HTML
 
-**EditMemberUseCase.Execute(input)**
-1. Validate input (MemberID must be valid; if seniority provided, must be valid)
-2. Call repo.FindByID(input.MemberID) to load existing member
-3. If not found, return error (member not found)
-4. Apply mutations on aggregate: if firstName provided, call member.UpdateName(); if seniority provided, call member.ChangeSeniority()
-5. Call repo.Save(member) to persist changes
-6. Generate UUID, return EditMemberOutput
+**POST /members (form submit for add):**
+1. Form submits to POST /members with form-encoded body: `firstName`, `lastName`, `seniority`
+2. Handler parses form data
+3. Calls existing `AddMemberUC.Execute(input)` → returns `AddMemberOutput` or error
+4. If error: re-render `add.html` with error message and form values (client-side validation before submit prevents most errors)
+5. If success: redirect to `/members` (HTTP 302 or via JavaScript)
+6. Browser navigates to `/members`, sees member in list
 
-**DeactivateMemberUseCase.Execute(input)**
-1. Validate input (MemberID must be positive)
-2. Call repo.FindByID(input.MemberID) to load member
-3. If not found, return error
-4. Call member.Deactivate() to apply domain operation
-5. Call repo.Save(member) to persist deactivation
-6. Return DeactivateMemberOutput { Success: true }
+**GET /members/{id}/edit (edit form):**
+1. Handler extracts member ID from URL path
+2. Calls `GetMembersUC.Execute()` to get all active members
+3. Finds member with matching ID in response
+4. Maps to template data
+5. Executes `server/templates/members/edit.html` with member data
+6. Returns rendered HTML (form pre-populated with current values)
 
-**HTTP adapter flow (server/handler_members.go)**
-1. Handler receives HTTP request (e.g., POST /api/members with JSON body)
-2. Parse JSON to AddMemberRequest
-3. Create AddMemberInput from request fields
-4. Call injected AddMemberUseCase.Execute(input)
-5. Map AddMemberOutput to AddMemberResponse (convert int64 ID to UUID string)
-6. Write HTTP response (201 Created, JSON body)
-7. On error from use case: inspect error type (validation vs. not-found vs. database), map to HTTP status + JSON error response
+**PATCH /api/members/{id} (form submit for edit):**
+1. Form submits to PATCH /api/members/{id} with JSON body: `firstName`, `lastName`, `seniority`
+2. Existing handler processes request, calls `EditMemberUC.Execute(input)` → returns `EditMemberOutput` or error
+3. If error: returns JSON error (client-side validation prevents; rare)
+4. If success: returns JSON success response
+5. Client-side JavaScript receives response, redirects to `/members`
 
-**UUID mapping (unchanged from current)**
-- Internal ID: int64 (database primary key)
-- External ID: UUID string (API contract)
-- Mapping function: memberIDToUUID(domainID int64) string — uses v5 with namespace `6ba7b810-9dad-11d1-80b4-00c04fd430c8`
+**DELETE /api/members/{id} (deactivate):**
+1. List page has "Deactivate" button on each row
+2. Button calls DELETE /api/members/{id} via fetch() or HTMX
+3. Existing handler processes request, calls `DeactivateMemberUC.Execute(input)` → returns `DeactivateMemberOutput` or error
+4. If success: returns JSON success; client-side removes row from table (no page reload)
+5. If error: returns JSON error; client-side displays toast/alert
 
 ### Error / Edge-case Inventory
 
 | Condition | Expected response | Covered by |
 |-----------|-------------------|------------|
-| firstName or lastName empty in AddMemberUseCase | Return validation error (not persisted) | Subtask 2 — AddMemberUseCase test |
-| seniority invalid (not in enum) in AddMemberUseCase | Return validation error | Subtask 2 — AddMemberUseCase test |
-| Repo.Save fails (database error) in AddMemberUseCase | Return database error wrapped with user message | Subtask 2 — AddMemberUseCase test |
-| MemberID not found in EditMemberUseCase | Return not-found error (no partial updates) | Subtask 4 — EditMemberUseCase test |
-| seniority invalid in EditMemberUseCase | Return validation error; aggregate unchanged | Subtask 4 — EditMemberUseCase test |
-| Repo.FindActive returns empty list in GetMembersUseCase | Return GetMembersOutput with empty Members slice (not an error) | Subtask 3 — GetMembersUseCase test |
-| Member already deactivated in DeactivateMemberUseCase | Aggregate.Deactivate() returns error; wrapped and returned | Subtask 5 — DeactivateMemberUseCase test |
-| Repo.FindByID returns nil (member not in DB) in DeactivateMemberUseCase | Return not-found error | Subtask 5 — DeactivateMemberUseCase test |
-| HTTP handler receives invalid JSON | Parse error caught; return 400 Bad Request | Subtask 7 — handler test |
-| HTTP handler receives unknown field in JSON | JSON decoder ignores extra fields (Go default); no error | Subtask 7 — handler test |
-| Multiple simultaneous in-memory adapter writes | No race condition (Go map access is single-threaded within use case call); tests use non-concurrent injection | Subtask 6 — no special handling needed |
+| Member name is empty | Validation error on submit; re-render form with error and form values | Template + handler (AC-5) |
+| Member name > 100 chars | Validation error on submit; re-render form with error | Template + handler (AC-5) |
+| Seniority field is empty | Validation error on submit; re-render form with error | Template + handler (AC-5) |
+| Invalid seniority value | Use case validates; handler returns 400 JSON error | Existing use case (AC-5) |
+| Member ID in URL is invalid (not a UUID) | Handler logs error, returns 404 HTML page | Subtask 3 — handler validation |
+| Member not found in edit flow | Handler displays "Member not found" message | Subtask 3 — handler validation |
+| Database error on fetch members | Existing use case returns error; handler returns 500 HTML page | Existing use case |
+| Deactivate a member that is already deactivated | API returns error; client-side displays error toast | Existing use case (AC-4) |
+| User tries to edit a deactivated member | Member not in list; if ID guessed in URL, handler returns 404 (deactivated members not returned by GetMembers) | Subtask 3 — handler validation |
+| Form double-submit (user clicks button twice before redirect) | Client-side submit button disables on click (JavaScript); second click has no effect | Subtask 2 — client-side interactivity (AC-2, AC-3) |
 
 ### Observability Intent
 
 | Event | Level | Data |
 |-------|-------|------|
-| `core.member.created` | debug | member_id (internal int64), first_name, last_name, seniority |
-| `core.member.deactivated` | debug | member_id, deactivated_at (timestamp) |
-| `core.member.updated` | debug | member_id, changed_fields (e.g., "seniority, last_name") |
-| `adapter.save_failed` | error | member_id, error_message, adapter_type (sqlite/memory) |
-| `adapter.find_failed` | error | member_id, error_message, adapter_type |
+| `handler.get_members_list` | debug | count_members, render_time_ms |
+| `handler.add_member_form_displayed` | debug | — (user viewed form) |
+| `handler.add_member_submitted` | info | status (success\|error), error_reason |
+| `handler.edit_member_form_displayed` | debug | member_id |
+| `handler.edit_member_submitted` | info | member_id, status, error_reason |
+| `handler.deactivate_member` | info | member_id, status, error_reason |
 
-Implementation: use `log.Printf()` or structured logging package (e.g., `log/slog`). No external telemetry. Logs written to stderr.
+Logging via Go stdlib `log.Printf` or structured logger (e.g., `slog`). No external telemetry service.
 
 ### Architecture Delta
 
-Current architecture (from `docs/architecture.md`):
-```
-server/ (HTTP handlers)
-  ↓ delegates to
-coordinator/ (MemberAPICoordinator)
-  ↓ calls
-service/member/ (MemberService)
-  ↓ calls
-store/ (SQLiteTeamMemberRepository)
-```
+**No container changes.** The Members screen remains within the `server/` (HTTP adapter) container. Templates are new artifacts but not a separate deployable. The `core/members/` use cases are unchanged and continue to be the API contract.
 
-New architecture:
-```
-server/ (HTTP handlers)
-  ↓ calls
-core/members/ (use cases: AddMemberUseCase, etc.)
-  ↓ depends on
-core/members/ (MemberRepository port/interface)
-  ↑ implemented by
-storage/memory/ and storage/sqlite/ (adapters)
-```
+**New data flow:** Previously, only JSON API existed (`/api/members`). Now:
+- GET `/members` renders HTML (new)
+- GET `/members/add` renders form HTML (new)
+- POST `/members` accepts form data, redirects to list (new; routes to same use case as POST `/api/members` but renders HTML instead of JSON)
+- GET `/members/{id}/edit` renders form HTML with member data (new)
+- Existing PATCH `/api/members/{id}` and DELETE `/api/members/{id}` unchanged
 
-**Container-level changes:**
-- New container: `core/members/` (core business logic; reusable, infrastructure-agnostic)
-- New containers: `storage/memory/` and `storage/sqlite/` (adapters; depend inward on core)
-- Removed container: `coordinator/member_api.go` (replaced by use cases; coordinator pattern deprecated for member CRUD)
-- Unchanged: `engine/domain/` (aggregates, value objects remain; referenced by core/members)
-- HTTP handlers remain in `server/`, but now call use cases directly instead of coordinator
-
-**Dependency direction change:**
-- Old: `server → coordinator → service → store` (one-way downward chain)
-- New: `server → core ← storage` (hexagonal: adapters depend inward on core; core has zero outbound dependencies)
-
-The C4 diagram in `docs/architecture.md` will be updated post-increment to reflect the new hexagonal structure. No functional change to API contract (HTTP endpoints, request/response format, UUID behavior).
+**No reverse dependency:** Server does not import new code from core or storage. Core and storage remain unaware of template rendering.
 
 ## Files
 
 | File | Role | Notes |
 |------|------|-------|
-| `core/members/member.go` | new | Moved/refactored from `engine/domain/aggregates.go` TeamMember aggregate; add UpdateName method |
-| `core/members/repository.go` | new | MemberRepository port interface definition |
-| `core/members/add_member.go` | new | AddMemberUseCase |
-| `core/members/get_members.go` | new | GetMembersUseCase |
-| `core/members/edit_member.go` | new | EditMemberUseCase |
-| `core/members/deactivate_member.go` | new | DeactivateMemberUseCase |
-| `core/members/add_member_test.go` | new | Unit tests for AddMemberUseCase |
-| `core/members/get_members_test.go` | new | Unit tests for GetMembersUseCase |
-| `core/members/edit_member_test.go` | new | Unit tests for EditMemberUseCase |
-| `core/members/deactivate_member_test.go` | new | Unit tests for DeactivateMemberUseCase |
-| `storage/memory/member_repository.go` | new | InMemoryMemberRepository adapter (for tests) |
-| `storage/memory/member_repository_test.go` | new | Tests for in-memory adapter |
-| `storage/sqlite/member_repository.go` | new | Extract and refactor from `store/member.go` |
-| `storage/sqlite/member_repository_test.go` | new | Tests for SQLite adapter (reference existing `store/member_test.go` for test cases) |
-| `server/handler_members.go` | modify | Call use cases instead of coordinator; remain thin HTTP adapter |
-| `server/handler_members_test.go` | modify | Mock use cases instead of coordinator |
-| `main.go` | modify | Wire adapters + use cases at composition root; inject into handlers |
-| `service/coordinator/member_api.go` | delete | Coordinator replaced by use cases |
-| `engine/domain/aggregates.go` | touch | Reference for TeamMember aggregate (may remain in engine/domain or move to core/members) |
-| `store/member.go` | touch | Reference for current SQLite implementation; code extracted to storage/sqlite/ |
-| `CONSTITUTION.md` | touch | Reference for dependency rules and architecture boundaries |
-| `docs/architecture.md` | touch | Reference; C4 diagram updated post-increment (not this increment) |
+| `server/server.go` | modify | register new routes: GET `/members`, GET `/members/add`, POST `/members`, GET `/members/{id}/edit` |
+| `server/handler_members.go` | modify | add `HandlerGetMembersPage`, `HandlerAddMemberPage`, `HandlerPostAddMember`, `HandlerEditMemberPage` (new functions; existing API handlers unchanged) |
+| `server/handler_members_test.go` | modify | add tests for new handlers |
+| `server/templates/members/list.html` | new | members list page with table and action buttons |
+| `server/templates/members/add.html` | new | add member form page |
+| `server/templates/members/edit.html` | new | edit member form page |
+| `server/templates/components/member_form.html` | new | reusable form fields (firstName, lastName, seniority) to avoid duplication between add.html and edit.html |
+| `server/templates/layout.html` | modify | update sidebar link from `/settings` to `/members` |
+| `docs/ui.md` | touch | reference for accessibility, responsive breakpoints, form patterns |
+| `docs/architecture.md` | touch | reference for HTTP → use case → repository flow |
 
 ## Subtasks
 
-### 1. Create core/members package structure and move/refactor TeamMember aggregate
+### 1. Update sidebar link from Settings to Members
 **type:** [tidy]
 
-**description:** Extract TeamMember aggregate from `engine/domain/aggregates.go` into `core/members/member.go`. Add `UpdateName(firstName, lastName string) error` method to support edit use case. Ensure all existing methods (ID, Name, Seniority, CreatedAt, IsActive, DeactivatedAt, Deactivate, ChangeSeniority) remain. No behavior change; aggregate interface remains the same.
+**description:** Rename the "Settings" sidebar link to "Members" and point to `/members` instead of `/settings`.
 
 **files:**
-- `core/members/member.go` (new)
-- `engine/domain/aggregates.go` (touch — reference; consider keeping FullName and Seniority value objects in engine/domain for reuse by monthly entries)
+- `server/templates/layout.html`
 
 **references:**
-- `engine/domain/aggregates.go:17-93` — TeamMember aggregate definition
-- `engine/domain/aggregates.go:320-380` — FullName value object
-- `engine/domain/aggregates.go:382-420` — Seniority value object
+- `server/templates/layout.html:322` — current Settings link
 
-**verification:** 
-- `go build ./core/members` succeeds
-- `go test ./core/members -run TestTeamMember` passes (existing aggregate tests moved)
-- Aggregate methods all present and call signatures match original
+**verification:** Manual: open browser, verify sidebar shows "Members" link pointing to `/members`
 
 **depends on:** —
 
-**acceptance criteria:** AC-1 (core business logic infrastructure-independent)
+**acceptance criteria:** — (structural prep)
 
 ---
 
-### 2. Define MemberRepository port interface in core/members/repository.go
+### 2. Scaffold templates directory and member form component
 **type:** [tidy]
 
-**description:** Create `core/members/repository.go` with MemberRepository interface definition. Define port contract: Save, FindByID, FindActive, Deactivate methods. No implementation; interface only. This port defines what adapters must provide to use cases.
+**description:** Create the template subdirectories and a reusable `member_form.html` component containing the form fields (firstName, lastName, seniority select). This component will be included in both `add.html` and `edit.html` to avoid duplication.
 
 **files:**
-- `core/members/repository.go` (new)
+- `server/templates/members/` (new directory)
+- `server/templates/components/member_form.html` (new file — form field component)
 
 **references:**
-- `store/member.go:23-126` — Current Save, FindByID, FindActive, Deactivate implementation (reference only for contract)
+- `server/templates/layout.html` — existing template structure for reference
 
-**verification:**
-- `go build ./core/members` succeeds
-- Interface compiles with correct method signatures
-- No implementation code in repository.go file
+**verification:** Directory structure created; component file contains form fields without form wrapping (form wrapping added by add.html and edit.html)
 
-**depends on:** 1
+**depends on:** —
 
-**acceptance criteria:** AC-2 (port interface defined in core/members)
+**acceptance criteria:** — (structural prep)
 
 ---
 
-### 3. Create AddMemberUseCase with unit tests
+### 3. Add HTTP handler for GET /members (list page)
 **type:** [behavior]
 
-**description:** Implement AddMemberUseCase in `core/members/add_member.go`. Constructor takes MemberRepository (injected port). Execute(input AddMemberInput) method: validate firstName, lastName (non-empty), seniority (valid enum); create TeamMember aggregate; call repo.Save(); return AddMemberOutput. Unit tests use in-memory repository from storage/memory/.
+**description:** Create `HandlerGetMembersPage` in `server/handler_members.go` that calls `GetMembersUC.Execute()`, maps results to template data, executes `members/list.html` template, and returns rendered HTML. Handle error cases (database error → 500 page).
 
 **files:**
-- `core/members/add_member.go` (new)
-- `core/members/add_member_test.go` (new)
-- `storage/memory/member_repository.go` (new — created as prerequisite for testing)
+- `server/handler_members.go` (add function)
+- `server/handler_members_test.go` (add tests)
 
 **references:**
-- `core/members/member.go` — TeamMember aggregate
-- `core/members/repository.go` — MemberRepository port
-- `engine/domain/aggregates.go:382-420` — Seniority enum and Valid() method
-- `service/coordinator/member_api.go:46-80` — Current AddMember validation logic (reference for test cases)
+- `server/handler_members.go:110` — existing `HandlerAddMember` for pattern
+- `core/members/get_members.go` — use case interface to understand output
+- `docs/ui.md#shell-layout` — responsive table design guidance
 
 **tests:**
-- id: add-member-success
-  file: `core/members/add_member_test.go`
-  name: `TestAddMemberUseCase_Success_CreatesAndPersists`
-  state: pending
-- id: add-member-missing-first-name
-  file: `core/members/add_member_test.go`
-  name: `TestAddMemberUseCase_EmptyFirstName_ReturnsValidationError`
-  state: pending
-- id: add-member-missing-last-name
-  file: `core/members/add_member_test.go`
-  name: `TestAddMemberUseCase_EmptyLastName_ReturnsValidationError`
-  state: pending
-- id: add-member-invalid-seniority
-  file: `core/members/add_member_test.go`
-  name: `TestAddMemberUseCase_InvalidSeniority_ReturnsValidationError`
-  state: pending
-- id: add-member-repo-error
-  file: `core/members/add_member_test.go`
-  name: `TestAddMemberUseCase_RepositorySaveError_ReturnsError`
-  state: pending
-
-**active_test:** add-member-success
-
-**verification:**
-- `go test ./core/members -run TestAddMemberUseCase` passes all 5 test cases
-- Use case creates new TeamMember with next available ID
-- Output includes correct firstName, lastName, seniority, status (Active), createdAt
-- Validation errors caught before repo.Save called (tests verify repo not called on validation error)
-
-**depends on:** 1, 2
-
-**acceptance criteria:** AC-1 (AddMemberUseCase exists and tested with injected in-memory adapter)
-
----
-
-### 4. Create GetMembersUseCase with unit tests
-**type:** [behavior]
-
-**description:** Implement GetMembersUseCase in `core/members/get_members.go`. Constructor takes MemberRepository. Execute() method (no input): call repo.FindActive(), map results to output DTOs, return GetMembersOutput. Handle empty list gracefully (return empty Members slice, not error).
-
-**files:**
-- `core/members/get_members.go` (new)
-- `core/members/get_members_test.go` (new)
-
-**references:**
-- `core/members/repository.go:FindActive()` — Port method
-- `service/coordinator/member_api.go:42-44` — Current GetMembers (reference)
-
-**tests:**
-- id: get-members-empty
-  file: `core/members/get_members_test.go`
-  name: `TestGetMembersUseCase_NoMembers_ReturnsEmptyList`
-  state: pending
-- id: get-members-single
-  file: `core/members/get_members_test.go`
-  name: `TestGetMembersUseCase_SingleMember_ReturnsOneItem`
-  state: pending
-- id: get-members-multiple
-  file: `core/members/get_members_test.go`
-  name: `TestGetMembersUseCase_MultipleMembers_ReturnsAll`
-  state: pending
-- id: get-members-excludes-inactive
-  file: `core/members/get_members_test.go`
-  name: `TestGetMembersUseCase_ExcludesInactiveMembers`
-  state: pending
-
-**active_test:** get-members-empty
-
-**verification:**
-- `go test ./core/members -run TestGetMembersUseCase` passes all 4 test cases
-- Empty list returns GetMembersOutput with zero-length Members slice (not nil, not error)
-- Multiple members returned in order (if deterministic) with correct fields
-- Only active members (IsActive() == true) included in output
-
-**depends on:** 1, 2, 3
-
-**acceptance criteria:** AC-1 (GetMembersUseCase exists and tested)
-
----
-
-### 5. Create EditMemberUseCase with unit tests
-**type:** [behavior]
-
-**description:** Implement EditMemberUseCase in `core/members/edit_member.go`. Constructor takes MemberRepository. Execute(input EditMemberInput) method: validate input (memberID positive, seniority valid if provided); call repo.FindByID(); if not found, return error; apply mutations on aggregate (call UpdateName and/or ChangeSeniority); call repo.Save(); return EditMemberOutput. Partial updates supported (empty string means no change).
-
-**files:**
-- `core/members/edit_member.go` (new)
-- `core/members/edit_member_test.go` (new)
-- `core/members/member.go` (modify — add UpdateName method if not present)
-
-**references:**
-- `core/members/member.go:UpdateName` — New method to add
-- `core/members/repository.go` — MemberRepository port
-- `service/coordinator/member_api.go:105-158` — Current EditMember logic (reference)
-
-**tests:**
-- id: edit-member-success
-  file: `core/members/edit_member_test.go`
-  name: `TestEditMemberUseCase_UpdateAllFields_Success`
-  state: pending
-- id: edit-member-partial-update
-  file: `core/members/edit_member_test.go`
-  name: `TestEditMemberUseCase_PartialUpdate_OnlyChangedFields`
-  state: pending
-- id: edit-member-not-found
-  file: `core/members/edit_member_test.go`
-  name: `TestEditMemberUseCase_MemberNotFound_ReturnsError`
-  state: pending
-- id: edit-member-invalid-seniority
-  file: `core/members/edit_member_test.go`
-  name: `TestEditMemberUseCase_InvalidSeniority_ReturnsValidationError`
-  state: pending
-- id: edit-member-empty-name
-  file: `core/members/edit_member_test.go`
-  name: `TestEditMemberUseCase_EmptyFirstNameField_ReturnValidationError`
-  state: pending
-
-**active_test:** edit-member-success
-
-**verification:**
-- `go test ./core/members -run TestEditMemberUseCase` passes all 5 test cases
-- Partial updates work (empty string fields not applied)
-- Not-found error returned before repo.Save called
-- Validation errors caught before repo.Save called
-
-**depends on:** 1, 2, 4
-
-**acceptance criteria:** AC-1 (EditMemberUseCase exists and tested)
-
----
-
-### 6. Create DeactivateMemberUseCase with unit tests
-**type:** [behavior]
-
-**description:** Implement DeactivateMemberUseCase in `core/members/deactivate_member.go`. Constructor takes MemberRepository. Execute(input DeactivateMemberInput) method: validate input (memberID positive); call repo.FindByID(); if not found, return error; call member.Deactivate() on aggregate; call repo.Save(); return DeactivateMemberOutput { Success: true }. Deactivation is idempotent only if handled correctly (aggregate.Deactivate() returns error if already deactivated).
-
-**files:**
-- `core/members/deactivate_member.go` (new)
-- `core/members/deactivate_member_test.go` (new)
-
-**references:**
-- `core/members/member.go:Deactivate()` — Aggregate method
-- `core/members/repository.go` — MemberRepository port
-- `service/coordinator/member_api.go:175-206` — Current DeactivateMember logic (reference)
-
-**tests:**
-- id: deactivate-member-success
-  file: `core/members/deactivate_member_test.go`
-  name: `TestDeactivateMemberUseCase_ActiveMember_Success`
-  state: pending
-- id: deactivate-member-not-found
-  file: `core/members/deactivate_member_test.go`
-  name: `TestDeactivateMemberUseCase_MemberNotFound_ReturnsError`
-  state: pending
-- id: deactivate-member-already-inactive
-  file: `core/members/deactivate_member_test.go`
-  name: `TestDeactivateMemberUseCase_AlreadyInactive_ReturnsError`
-  state: pending
-
-**active_test:** deactivate-member-success
-
-**verification:**
-- `go test ./core/members -run TestDeactivateMemberUseCase` passes all 3 test cases
-- Active member successfully deactivated; deactivatedAt timestamp set
-- Not-found error returned before aggregate.Deactivate() called
-- Already-inactive error returned from aggregate.Deactivate() and wrapped
-
-**depends on:** 1, 2, 5
-
-**acceptance criteria:** AC-1 (DeactivateMemberUseCase exists and tested)
-
----
-
-### 7. Create in-memory storage adapter (storage/memory/member_repository.go)
-**type:** [tidy]
-
-**description:** Implement InMemoryMemberRepository in `storage/memory/member_repository.go`. Implements MemberRepository port using Go map to store members in memory. Used by all use case unit tests. No persistence; data lost on process exit. Minimal implementation (no fancy data structures; map is sufficient for test use).
-
-**files:**
-- `storage/memory/member_repository.go` (new)
-- `storage/memory/member_repository_test.go` (new)
-
-**references:**
-- `core/members/repository.go` — MemberRepository interface to implement
-- `core/members/member.go` — TeamMember type
-
-**verification:**
-- `go build ./storage/memory` succeeds
-- Implements all MemberRepository methods
-- `go test ./storage/memory -run InMemory` passes (CRUD tests)
-
-**depends on:** 1, 2
-
-**acceptance criteria:** AC-3 (in-memory adapter implemented and available for test injection)
-
----
-
-### 8. Create SQLite storage adapter (storage/sqlite/member_repository.go)
-**type:** [tidy]
-
-**description:** Extract and refactor SQLite implementation from `store/member.go` into `storage/sqlite/member_repository.go`. Implements MemberRepository port using SQLite. Minimal refactoring to match port interface; preserve all existing logic (audit log, error handling, ID generation). Ensure no behavior change from current store/member.go implementation.
-
-**files:**
-- `storage/sqlite/member_repository.go` (new — extracted from store/member.go)
-- `storage/sqlite/member_repository_test.go` (new — reference store/member_test.go)
-
-**references:**
-- `core/members/repository.go` — MemberRepository interface
-- `store/member.go:23-333` — Current SQLite implementation (extract and adapt)
-- `store/member_test.go` — Existing test cases (reference for new tests)
-
-**verification:**
-- `go build ./storage/sqlite` succeeds
-- All methods implement MemberRepository interface exactly
-- `go test ./storage/sqlite -run SQLite` passes (test same cases as store/member_test.go)
-- Behavior identical to current store/member.go (no test failures)
-
-**depends on:** 1, 2
-
-**acceptance criteria:** AC-3 (SQLite adapter implemented)
-
----
-
-### 9. Create use case unit test suite (all four use cases, injecting in-memory adapter)
-**type:** [behavior]
-
-**description:** Already covered in subtasks 3–6 (AddMemberUseCase, GetMembersUseCase, EditMemberUseCase, DeactivateMemberUseCase). Each has comprehensive unit tests that inject InMemoryMemberRepository. This subtask confirms all unit tests pass together with `-race` flag and clean imports.
-
-**files:**
-- `core/members/add_member_test.go` (reference — created in subtask 3)
-- `core/members/get_members_test.go` (reference — created in subtask 4)
-- `core/members/edit_member_test.go` (reference — created in subtask 5)
-- `core/members/deactivate_member_test.go` (reference — created in subtask 6)
-
-**references:**
-- `CONSTITUTION.md#testing-strategy` — Testing practices
-
-**tests:** (all tests from subtasks 3–6 run together)
-
-**verification:**
-- `go test -race ./core/members` passes all 16+ test cases
-- No circular imports detected
-- No infrastructure dependencies in core packages (grep confirms: no imports from storage/, server/, service/, engine/scoring/)
-
-**depends on:** 3, 4, 5, 6, 7
-
-**acceptance criteria:** AC-1 (use case unit tests pass with in-memory adapter injection)
-
----
-
-### 10. Refactor HTTP handlers to call use cases directly
-**type:** [behavior]
-
-**description:** Update `server/handler_members.go` to call AddMemberUseCase, GetMembersUseCase, EditMemberUseCase, DeactivateMemberUseCase instead of coordinator. Handlers remain thin adapters: parse HTTP request → create use case input → call Execute() → map output to JSON response → write HTTP status. Error handling: inspect use case error type, map to HTTP status (validation 400, not-found 404, database 500).
-
-**files:**
-- `server/handler_members.go` (modify)
-
-**references:**
-- `server/handler_members.go:36-276` — Current handler implementations (reference)
-- `core/members/add_member.go` — AddMemberUseCase interface
-- `core/members/get_members.go` — GetMembersUseCase interface
-- `core/members/edit_member.go` — EditMemberUseCase interface
-- `core/members/deactivate_member.go` — DeactivateMemberUseCase interface
-
-**tests:**
-- id: handler-add-member-success
-  file: `server/handler_members_test.go`
-  name: `TestHandlerAddMember_ValidRequest_Success`
-  state: pending
-- id: handler-add-member-invalid-json
-  file: `server/handler_members_test.go`
-  name: `TestHandlerAddMember_InvalidJSON_ReturnsBadRequest`
-  state: pending
 - id: handler-get-members-success
   file: `server/handler_members_test.go`
-  name: `TestHandlerGetMembers_Success`
+  name: `TestHandlerGetMembersPage_ReturnsHTMLWithMembers`
   state: pending
-- id: handler-edit-member-success
+- id: handler-get-members-empty
   file: `server/handler_members_test.go`
-  name: `TestHandlerEditMember_ValidRequest_Success`
+  name: `TestHandlerGetMembersPage_EmptyListWorks`
   state: pending
-- id: handler-deactivate-member-success
+- id: handler-get-members-error
   file: `server/handler_members_test.go`
-  name: `TestHandlerDeactivateMember_ValidRequest_Success`
+  name: `TestHandlerGetMembersPage_ReturnsErrorOn500`
   state: pending
 
-**active_test:** handler-add-member-success
+**active_test:** handler-get-members-success
 
-**verification:**
-- `go test ./server -run TestHandler` passes all 5+ handler tests
-- Handlers no longer import coordinator
-- HTTP status codes and response formats match current behavior (no API contract change)
+**verification:** `go test -run TestHandlerGetMembersPage` — all tests pass; handler is testable with mocked use case (no database)
 
-**depends on:** 1, 2, 3, 4, 5, 6
+**depends on:** 1, 2
 
-**acceptance criteria:** AC-4 (HTTP handlers call use cases; coordinator removed)
+**acceptance criteria:** AC-1 (list renders with member data)
 
 ---
 
-### 11. Refactor server/handler_members_test.go to mock use cases
+### 4. Create members list template (list.html)
 **type:** [behavior]
 
-**description:** Update `server/handler_members_test.go` to mock use cases instead of coordinator. Tests remain focused on HTTP parsing and response serialization. Mock use cases using simple test doubles (not a full mocking library). Verify handler tests no longer touch database or call real coordinator.
+**description:** Create `server/templates/members/list.html` — a responsive HTML page showing all active members in a table. Include columns: Name, Seniority, Actions. Actions row has "Edit" link (→ `/members/{id}/edit`) and "Deactivate" button (→ DELETE `/api/members/{id}`). Deactivate button uses fetch() to call API; on success, removes row from DOM and hides it with fade-out animation (Alpine.js or vanilla JS).
 
 **files:**
-- `server/handler_members_test.go` (modify)
+- `server/templates/members/list.html` (new)
 
 **references:**
-- `server/handler_members_test.go` — Existing test structure (reference)
-- `core/members/add_member.go`, etc. — Use case interfaces to mock
-
-**verification:**
-- `go test ./server -run TestHandler` passes all tests
-- Test file imports no coordinator, no store, no database packages
-- Mocks are simple test doubles (implement use case interface)
-
-**depends on:** 10
-
-**acceptance criteria:** AC-4, AC-5 (handler tests use injected mock use cases; no infrastructure access)
-
----
-
-### 12. Update main.go to wire adapters and use cases at composition root
-**type:** [tidy]
-
-**description:** Modify `main.go` to instantiate storage adapters (InMemoryMemberRepository for tests or SQLiteTeamMemberRepository for production), create use case instances with injected adapters, and pass use cases to HTTP server. Composition root is the single place where dependency injection happens. Preserve current flow: initialize database, create repositories, create use cases, start server.
-
-**files:**
-- `main.go` (modify)
-
-**references:**
-- `main.go:18-51` — Current wiring (reference)
-- `storage/sqlite/member_repository.go` — SQLite adapter to instantiate
-- `core/members/add_member.go`, etc. — Use cases to instantiate
-
-**verification:**
-- `go build ./...` succeeds
-- No import cycles detected
-- main.go imports storage (for adapter), core/members (for use cases), server (for handlers)
-- Application starts and HTTP server runs
-
-**depends on:** 8, 10
-
-**acceptance criteria:** AC-5 (composition root wires adapters; dependency graph is acyclic)
-
----
-
-### 13. Delete service/coordinator/member_api.go entirely
-**type:** [tidy]
-
-**description:** Remove `service/coordinator/member_api.go`. Coordinator has been replaced by use cases. No other file should import member_api after step 10; confirm with grep before deletion.
-
-**files:**
-- `service/coordinator/member_api.go` (delete)
-
-**references:**
-- `service/coordinator/member_api.go` — File to delete
-
-**verification:**
-- `grep -r "coordinator.MemberAPICoordinator" ./` returns zero results (no remaining imports)
-- `go build ./...` succeeds after deletion
-- No test failures
-
-**depends on:** 10, 12
-
-**acceptance criteria:** AC-4 (coordinator removed entirely)
-
----
-
-### 14. Run full test suite and verify no circular imports
-**type:** [behavior]
-
-**description:** Execute `go test -race ./...` to confirm all 21+ tests pass. Verify no circular imports with `go build ./...`. Check that core/members/ has zero imports from storage/, server/, service/, or ui/ (use grep or go list -d). Confirm dependency flow is hexagonal: server → core ← storage.
-
-**files:**
-- All files (indirect verification)
-
-**references:**
-- `CONSTITUTION.md#architecture-boundaries` — Dependency rules
-- `.agent/increment.md#acceptance-criteria` — Binary criteria
+- `docs/ui.md#touch-targets` — button min size 44px
+- `docs/ui.md#responsive-breakpoints` — table should stack on mobile
+- `server/templates/layout.html:159` — main-content area structure for reference
 
 **tests:**
-- id: full-test-suite
-  file: (implicit)
-  name: `All 21+ tests pass with -race`
+- id: list-template-renders
+  file: `server/handler_members_test.go`
+  name: `TestMembersListTemplate_RendersWithoutError`
   state: pending
-- id: no-circular-imports
-  file: (implicit)
-  name: `go build ./... succeeds; no import cycles`
+- id: list-shows-member-names
+  file: `server/handler_members_test.go`
+  name: `TestMembersListTemplate_DisplaysMemberNamesAndSeniority`
   state: pending
-- id: core-independence
-  file: (implicit)
-  name: `core/members/ has zero outbound infrastructure dependencies`
+- id: list-edit-link-correct
+  file: `server/handler_members_test.go`
+  name: `TestMembersListTemplate_EditLinkPointsToCorrectMember`
+  state: pending
+- id: list-deactivate-button-exists
+  file: `server/handler_members_test.go`
+  name: `TestMembersListTemplate_DeactivateButtonPresent`
   state: pending
 
-**active_test:** full-test-suite
+**active_test:** list-template-renders
 
-**verification:**
-- `go test -race ./...` output: all tests PASS
-- `go build ./...` output: no errors or warnings
-- `go list -d ./core/members/...` output: imports are only stdlib and engine/domain
-- `grep -r "import.*storage/" ./core/members/` returns zero results
-- `grep -r "import.*server/" ./core/members/` returns zero results
-- `grep -r "import.*service/" ./core/members/` returns zero results
-- `grep -r "import.*ui/" ./core/members/` returns zero results
+**verification:** `go test -run TestMembersListTemplate` — all tests pass; template renders HTML with no errors; links and buttons present
 
-**depends on:** 1–13 (all prior subtasks)
+**depends on:** 3
 
-**acceptance criteria:** AC-1, AC-2, AC-3, AC-4, AC-5 (all binary criteria met; no circular imports)
+**acceptance criteria:** AC-1 (list displays members, edit/deactivate buttons present)
+
+---
+
+### 5. Add HTTP handler for GET /members/add and POST /members
+**type:** [behavior]
+
+**description:** Create two handlers:
+- `HandlerGetAddMemberPage` — GET /members/add — calls no use case, just renders empty `add.html` form
+- `HandlerPostAddMember` — POST /members — parses form data (form-encoded), calls `AddMemberUC.Execute()`, on error re-renders form with error message, on success redirects to `/members`
+
+**files:**
+- `server/handler_members.go` (add two functions)
+- `server/handler_members_test.go` (add tests)
+
+**references:**
+- `server/handler_members.go:58` — existing `HandlerAddMember` (JSON version) for reference; reuse validation logic
+- `core/members/add_member.go` — use case interface
+- `docs/ui.md#responsive-breakpoints` — form should stack on mobile
+
+**tests:**
+- id: get-add-form-success
+  file: `server/handler_members_test.go`
+  name: `TestHandlerGetAddMemberPage_ReturnsEmptyForm`
+  state: pending
+- id: post-add-form-valid
+  file: `server/handler_members_test.go`
+  name: `TestHandlerPostAddMember_ValidFormRedirectsToList`
+  state: pending
+- id: post-add-form-invalid
+  file: `server/handler_members_test.go`
+  name: `TestHandlerPostAddMember_InvalidFormRerenderWithError`
+  state: pending
+- id: post-add-form-missing-field
+  file: `server/handler_members_test.go`
+  name: `TestHandlerPostAddMember_MissingFieldShowsError`
+  state: pending
+
+**active_test:** get-add-form-success
+
+**verification:** `go test -run TestHandlerGetAddMemberPage -run TestHandlerPostAddMember` — all tests pass
+
+**depends on:** 2, 3
+
+**acceptance criteria:** AC-2 (add form renders, submission persists and redirects)
+
+---
+
+### 6. Create add member form template (add.html)
+**type:** [behavior]
+
+**description:** Create `server/templates/members/add.html` — a form page with:
+- Title: "Add Member"
+- Form fields: firstName, lastName, seniority (reused from `member_form.html`)
+- Submit button ("Add Member")
+- Cancel link (back to `/members`)
+- Error message display (if POST returns error, form re-renders with error at top)
+- Client-side form validation (required fields, name length < 100) before submit
+
+**files:**
+- `server/templates/members/add.html` (new)
+
+**references:**
+- `server/templates/components/member_form.html` — included for form fields
+- `docs/ui.md#touch-targets` — button sizes
+- `CONSTITUTION.md#testing-strategy` — all validation tested before reaching server
+
+**tests:**
+- id: add-form-renders
+  file: `server/handler_members_test.go`
+  name: `TestAddMemberTemplate_RendersWithoutError`
+  state: pending
+- id: add-form-has-fields
+  file: `server/handler_members_test.go`
+  name: `TestAddMemberTemplate_HasAllFormFields`
+  state: pending
+- id: add-form-shows-error
+  file: `server/handler_members_test.go`
+  name: `TestAddMemberTemplate_DisplaysErrorMessageWhenProvided`
+  state: pending
+
+**active_test:** add-form-renders
+
+**verification:** `go test -run TestAddMemberTemplate` — all tests pass; template has form fields, submit button, error display
+
+**depends on:** 5
+
+**acceptance criteria:** AC-2 (form renders, validates, and submits)
+
+---
+
+### 7. Add HTTP handler for GET /members/{id}/edit
+**type:** [behavior]
+
+**description:** Create `HandlerGetEditMemberPage` in `server/handler_members.go` that:
+- Extracts member ID from URL path (convert string to int64, then to UUID for lookup)
+- Calls `GetMembersUC.Execute()` to get all active members
+- Finds member with matching ID in response
+- If member not found (deactivated or invalid ID): render 404 page
+- If found: maps to template data, executes `edit.html` with member data pre-filled
+
+**files:**
+- `server/handler_members.go` (add function)
+- `server/handler_members_test.go` (add tests)
+
+**references:**
+- `server/handler_members.go:132` — existing `HandlerEditMember` (JSON version) for ID parsing logic
+- `server/server.go:33` — pattern for extracting path parameter
+- `core/members/get_members.go` — use case returns all active members (search within result)
+
+**tests:**
+- id: get-edit-form-success
+  file: `server/handler_members_test.go`
+  name: `TestHandlerGetEditMemberPage_LoadsAndRendersForm`
+  state: pending
+- id: get-edit-form-not-found
+  file: `server/handler_members_test.go`
+  name: `TestHandlerGetEditMemberPage_Returns404ForInvalidID`
+  state: pending
+- id: get-edit-form-deactivated
+  file: `server/handler_members_test.go`
+  name: `TestHandlerGetEditMemberPage_Returns404ForDeactivatedMember`
+  state: pending
+
+**active_test:** get-edit-form-success
+
+**verification:** `go test -run TestHandlerGetEditMemberPage` — all tests pass
+
+**depends on:** 2, 3
+
+**acceptance criteria:** AC-3 (edit form loads and pre-fills member data)
+
+---
+
+### 8. Create edit member form template (edit.html)
+**type:** [behavior]
+
+**description:** Create `server/templates/members/edit.html` — similar to `add.html` but:
+- Title: "Edit Member"
+- Form fields: firstName, lastName, seniority (reused from `member_form.html`, pre-filled with current values)
+- Submit button ("Save Member")
+- Cancel link (back to `/members`)
+- Form method: PATCH (to `/api/members/{id}`)
+- Error message display (if save fails, form re-renders with error)
+- Client-side validation (same as add.html)
+
+**files:**
+- `server/templates/members/edit.html` (new)
+
+**references:**
+- `server/templates/components/member_form.html` — included for form fields
+- `server/templates/members/add.html` — use as pattern
+- `docs/ui.md#touch-targets` — button sizes
+
+**tests:**
+- id: edit-form-renders
+  file: `server/handler_members_test.go`
+  name: `TestEditMemberTemplate_RendersWithoutError`
+  state: pending
+- id: edit-form-prefills
+  file: `server/handler_members_test.go`
+  name: `TestEditMemberTemplate_PrefillsCurrentValues`
+  state: pending
+- id: edit-form-shows-error
+  file: `server/handler_members_test.go`
+  name: `TestEditMemberTemplate_DisplaysErrorMessageWhenProvided`
+  state: pending
+
+**active_test:** edit-form-renders
+
+**verification:** `go test -run TestEditMemberTemplate` — all tests pass
+
+**depends on:** 7
+
+**acceptance criteria:** AC-3 (edit form renders with member data, can submit update)
+
+---
+
+### 9. Update server.go to register new routes
+**type:** [tidy]
+
+**description:** In `server/Start()`, register the new routes:
+- GET `/members` → `HandlerGetMembersPage`
+- GET `/members/add` → `HandlerGetAddMemberPage`
+- POST `/members` → `HandlerPostAddMember`
+- GET `/members/{id}/edit` → `HandlerGetEditMemberPage`
+
+Keep existing JSON API routes unchanged (`POST /api/members`, `GET /api/members`, `PATCH /api/members/{id}`, `DELETE /api/members/{id}`).
+
+**files:**
+- `server/server.go`
+
+**references:**
+- `server/server.go:20` — Start() function signature
+- `server/server.go:23` — existing API route registration pattern
+
+**verification:** `go build ./...` — builds without errors; routes registered in mux
+
+**depends on:** 5, 7
+
+**acceptance criteria:** — (wiring)
+
+---
+
+### 10. Test and verify responsive behavior on all breakpoints
+**type:** [behavior]
+
+**description:** Manually verify (or via Playwright acceptance tests) that the Members screen (list, add, edit) renders correctly on:
+- Desktop (≥1024px)
+- Tablet (769–1023px)
+- Mobile (≤768px)
+
+Verify:
+- List: table stacks to single column on mobile
+- Forms: inputs full-width on mobile, condensed padding
+- Buttons: min 44px touch targets on all sizes
+- Sidebar: visible on desktop, overlay on mobile
+- All text readable, no horizontal scroll
+
+**files:**
+- `server/handler_members_test.go` (add acceptance test)
+- Manual browser verification
+
+**references:**
+- `docs/ui.md#responsive-breakpoints`
+- `docs/ui.md#touch-targets`
+
+**tests:**
+- id: responsive-desktop
+  file: manual/playwright
+  name: `test Members screen on desktop (≥1024px)`
+  state: pending
+- id: responsive-tablet
+  file: manual/playwright
+  name: `test Members screen on tablet (769–1023px)`
+  state: pending
+- id: responsive-mobile
+  file: manual/playwright
+  name: `test Members screen on mobile (≤768px)`
+  state: pending
+
+**active_test:** responsive-desktop
+
+**verification:** Open `/members`, `/members/add`, `/members/{id}/edit` in browser at three viewport sizes; verify layout adjusts correctly, no horizontal scroll, touch targets ≥44px
+
+**depends on:** 4, 6, 8
+
+**acceptance criteria:** AC-7 (responsive on all breakpoints)
+
+---
+
+### 11. Test accessibility (WCAG 2.1 AA)
+**type:** [behavior]
+
+**description:** Verify accessibility of the Members screen:
+- Semantic HTML: `<form>`, `<label>`, `<table>`, heading hierarchy (H1, H2, H3)
+- ARIA labels on form inputs, buttons
+- Keyboard navigation: Tab through all interactive elements, enter submits forms
+- Focus outlines: 2px solid #3273dc, visible on all buttons and inputs
+- Color contrast: 4.5:1 for normal text (verified via browser dev tools)
+- Screen reader: test with NVDA or macOS VoiceOver (quick spot-check)
+
+**files:**
+- Manual accessibility audit (no code changes; documentation in implementation.md)
+
+**references:**
+- `docs/ui.md#accessibility`
+- `CONSTITUTION.md` — no explicit accessibility testing requirement, but `docs/ui.md` documents WCAG 2.1 AA target
+
+**tests:**
+- id: a11y-semantic-html
+  file: manual
+  name: `Verify semantic HTML (form, label, table, headings)`
+  state: pending
+- id: a11y-keyboard-nav
+  file: manual
+  name: `Verify Tab, Enter, and Esc keys work as expected`
+  state: pending
+- id: a11y-focus-outline
+  file: manual
+  name: `Verify 2px focus outline on all interactive elements`
+  state: pending
+- id: a11y-color-contrast
+  file: manual
+  name: `Verify text contrast ≥4.5:1`
+  state: pending
+
+**active_test:** a11y-semantic-html
+
+**verification:** Manual browser inspection + quick screen reader test (read form fields aloud)
+
+**depends on:** 6, 8
+
+**acceptance criteria:** AC-8 (accessibility WCAG 2.1 AA)
+
+---
+
+### 12. Update roadmap and close increment
+**type:** [tidy]
+
+**description:** Update `docs/roadmap.md`:
+- Move "Members Screen (SPA)" from Planned to Done
+- Add acceptance criteria met, evidence links (test files), and key commits
+- Mark Fyne Settings screen as deprecated (note when retiring)
+
+**files:**
+- `docs/roadmap.md`
+
+**references:**
+- `docs/roadmap.md#planned` — current section
+- `docs/roadmap.md#done` — where entry should go
+
+**verification:** Manual: read roadmap, verify entry in Done section with evidence links
+
+**depends on:** 11 (all functionality complete)
+
+**acceptance criteria:** — (documentation)
 
 ---
 
 ## Context Map
 
-- `CONSTITUTION.md#architecture-boundaries` — Dependency rules: `server → service → store → engine`; **this increment changes to `server → core ← storage` (hexagonal)**; must verify no violation
-- `CONSTITUTION.md#coordinator-pattern` — Coordinator documentation; coordinator for members is being removed; this increment closes the gap with use cases
-- `docs/architecture.md#c4-level-2` — Current container view; post-increment, update to show hexagonal structure (not part of this increment)
-- `docs/adr/ADR-20260915-uuid-member-ids.md` — UUID v5 namespace and mapping rules; unchanged in this increment; use cases generate UUIDs as before
-- `engine/domain/aggregates.go:1-93` — TeamMember aggregate (reference; will be refactored into core/members/)
-- `service/coordinator/member_api.go:1-207` — Current coordinator (reference for test cases and error handling; to be deleted)
-- `store/member.go:1-333` — Current SQLite implementation (reference for adapter extraction)
-- `server/handler_members.go:1-276` — Current handlers (to be refactored)
+- `CONSTITUTION.md#engineering-principles` — behavior-first, small focused changes, dependency direction
+- `CONSTITUTION.md#performance-envelope` — screen render ≤ 200ms target
+- `CONSTITUTION.md#testing-strategy` — all layers tested; browser tests optional in v1
+- `docs/ui.md` — shell layout, responsive breakpoints, accessibility, interaction patterns
+- `docs/architecture.md#containers` — HTTP adapter pattern, use case delegation, no business logic in handlers
+- `docs/architecture.md#communication-paths` — browser → HTTP handler → use case → storage
+- `docs/roadmap.md` — prior screens (Members API, Web App Shell), SPA increment sequencing
 
 ## Acceptance Scenarios
 
-### AT-1: Add member via HTTP API
-- criterion: AC-1, AC-4
-- user action: POST /api/members with { firstName: "Alice", lastName: "Smith", seniority: "Senior" }
-- precondition: server running, database initialized
-- expected outcome: HTTP 201 Created, response includes id (UUID), firstName, lastName, seniority, status (Active), createdAt
-- evidence: `server/handler_members_test.go::TestHandlerAddMember_Success` and `server/integration_test.go::TestMembersAPIIntegration_CRUD`
-- gate: advisory
-- state: planned
+These scenarios are advisory (not release-blocking per CONSTITUTION v1) but guide manual testing and Playwright E2E test writing.
 
-### AT-2: Edit member via HTTP API
-- criterion: AC-1, AC-4
-- user action: PATCH /api/members/{id} with { lastName: "Jones", seniority: "Lead" }
-- precondition: member exists with id
-- expected outcome: HTTP 200 OK, response includes updated lastName and seniority; createdAt unchanged
-- evidence: `server/handler_members_test.go::TestHandlerEditMember_Success`
-- gate: advisory
-- state: planned
+### AT-1: View all members
 
-### AT-3: Deactivate member via HTTP API
-- criterion: AC-1, AC-4
-- user action: DELETE /api/members/{id}
-- precondition: member is active
-- expected outcome: HTTP 200 OK; member marked inactive; subsequent GET /api/members excludes deactivated member
-- evidence: `server/handler_members_test.go::TestHandlerDeactivateMember_Success` and integration test
-- gate: advisory
-- state: planned
-
-### AT-4: Validation error on missing firstName
 - criterion: AC-1
-- user action: POST /api/members with { firstName: "", lastName: "Smith", seniority: "Senior" }
-- precondition: server running
-- expected outcome: HTTP 400 Bad Request, JSON error response with error message
-- evidence: `server/handler_members_test.go::TestHandlerAddMember_ValidationError`
+- precondition: 3 active members exist in database
+- user action: navigate to `/members` in browser
+- expected outcome: list page renders with all 3 members (name, seniority), each with Edit and Deactivate buttons
+- evidence: screenshot or Playwright test
+- gate: advisory
+- state: planned
+
+### AT-2: Add a new member
+
+- criterion: AC-2
+- precondition: user is on `/members`
+- user action: click "Add Member" button, fill form (first name, last name, seniority), click Save
+- expected outcome: form submits, page redirects to `/members`, new member appears in list
+- evidence: Playwright test in `tests/acceptance/members.spec.ts`
+- gate: advisory
+- state: planned
+
+### AT-3: Edit a member
+
+- criterion: AC-3
+- precondition: member exists in list
+- user action: click Edit on a member, change seniority, click Save
+- expected outcome: form submits, page redirects to `/members`, member's seniority updated in list
+- evidence: Playwright test
+- gate: advisory
+- state: planned
+
+### AT-4: Deactivate a member
+
+- criterion: AC-4
+- precondition: member is visible in list
+- user action: click Deactivate button on a member
+- expected outcome: row fades out and disappears from list (no page reload), database confirms member is deactivated
+- evidence: Playwright test or manual browser verification
+- gate: advisory
+- state: planned
+
+### AT-5: Persistence across reload
+
+- criterion: AC-6
+- precondition: members have been added/edited/deactivated in the session
+- user action: press F5 to reload the page
+- expected outcome: changes persist; list shows the same members as before reload
+- evidence: manual browser verification
 - gate: advisory
 - state: planned
 
 ## Risks
 
-1. **Circular imports during refactoring** — If any file in storage/ or server/ accidentally imports from core/members (or vice versa), build will fail. Mitigation: strict code review before approval; run `go build ./...` frequently during implementation.
+1. **Template rendering performance:** Go's `html/template` parsing and executing on every request could exceed 200ms performance envelope if templates are large or members list is huge (100+). Mitigation: measure latency; if > 100ms, consider template caching or precompilation.
 
-2. **Partial migration leaves old coordinator imported** — If handler refactoring incomplete, handlers still call coordinator; old and new code paths coexist. Mitigation: subtask 13 (delete coordinator) cannot complete until all handlers refactored and tests pass.
+2. **Form double-submit:** User clicks Submit twice before page redirects. Mitigation: client-side button disable on submit (JavaScript in form template).
 
-3. **UUID mapping inconsistency** — If new use cases generate UUIDs differently than current coordinator, API contract changes. Mitigation: reuse existing memberIDToUUID() function from current handler_members.go; no new ID generation logic.
+3. **Stale member data on edit:** Between GET `/members/{id}/edit` and PATCH `/api/members/{id}`, another user edits the same member. Our form overwrites their change (lost update). Mitigation: per CONSTITUTION "human review always" — no optimistic locking in v1; document as v2 feature.
 
-4. **In-memory adapter too simplistic for concurrent tests** — Go map access is not thread-safe. If tests run in parallel and share in-memory adapter, race condition occurs. Mitigation: each test creates its own InMemoryMemberRepository instance; tests run sequentially (Go default); `-race` flag used to detect any unexpected concurrency.
+4. **Deactivated member race condition:** User views `/members` list, another user deactivates a member, current user tries to edit that member (ID in URL). Mitigation: handler validates member is in active list; if not, returns 404.
 
-5. **Test coverage gap: storage adapter edge cases** — Current store/member_test.go has specific test cases (audit log, error handling) that must be preserved in storage/sqlite/member_repository_test.go. If not transferred, behavior regression. Mitigation: reference store/member_test.go explicitly in subtask 8; verify same test cases run on new adapter.
-
-6. **Performance regression** — Hexagonal architecture adds an extra abstraction layer (port interface). If adapters are slow or allocate heavily, HTTP latency could exceed CONSTITUTION.md envelope (< 200ms for screen render). Mitigation: in-memory adapter is trivially fast; SQLite adapter unchanged from store/member.go; performance validated manually during testing.
+5. **Mobile form usability:** Input fields on mobile may be small or keyboard-hidden. Mitigation: test on iOS/Android; use `autofocus` sparingly; ensure 44px min-height buttons.
 
 ## Planning Decisions
 
 | Decision | Chosen | Rejected | Reason |
 |----------|--------|----------|--------|
-| **Where to put core aggregates and ports** | `core/members/` (co-located) | Separate `domain/` and `application/` directories | Simpler navigation for small codebase (2 bounded contexts); easier to move entire feature to separate module later if needed; "core" signals infrastructure-independent |
-| **Repository port location** | `core/members/repository.go` (same package as use cases) | Separate `core/members/interfaces/` package | Less package fragmentation; port and use cases live together; adapters clearly depend on this one package |
-| **Adapter organization** | `storage/memory/` and `storage/sqlite/` (separate subdirs per tech) | Flat `storage/` with `InMemoryMemberRepository` and `SQLiteMemberRepository` in same file | Scaling: when monthly entry adapters added, subdirectories keep storage/ organized; easy to see which tech-specific adapters exist |
-| **Coordinator deletion timing** | Delete immediately (subtask 13) after handlers refactored | Leave for cleanup increment | Cleaner cutover; avoid maintaining two parallel paths; no risk of old code being called once handlers refactored and tests pass |
-| **TeamMember aggregate location** | Move to `core/members/member.go` | Keep in `engine/domain/` and import from there | core/members/ needs to be self-contained; future: if multiple bounded contexts use TeamMember, refactor to shared package (not yet needed) |
-| **Test doubles for handlers** | Simple hand-written mocks (test doubles) | Use `github.com/golang/mock` or other mocking library | Minimal dependencies; clearer test intent; no code generation; appropriate for 4–5 mock methods |
-| **In-memory adapter persistence** | Stateless per test (new instance per test) | Global map (shared across tests) | Test isolation; no hidden dependencies between tests; standard Go testing practice |
-| **UUID generation in use cases** | Call memberIDToUUID() from current handler code (unchanged) | Move to use cases and make configurable | No change to API contract; reuse existing logic; ports don't need to know about UUID scheme |
-| **Error types for validation vs. not-found** | Use Go built-in `error` interface; use error message prefix or custom type wrapper | Create domain error enum or error type hierarchy | Simpler for v1; can refactor to richer error types later if needed; tests can assert on error message or error type with type assertion |
-| **Async/concurrency in use cases** | Sequential (no goroutines in use case logic) | Parallel processing for batch operations | Not needed for CRUD operations; keep simple; add concurrency only if performance testing shows need |
+| **URL structure** | Routable: `/members`, `/members/add`, `/members/{id}/edit` | Modal overlays | User requested surfable, bookmarkable URLs. Routable URLs feel like a "real" web app and support browser back button. |
+| **Form rendering** | Server-side rendered (SSR) Go templates embedded in binary | Client-side SPA (React/Vue) | Go templates are simple, zero JS build step, all code in Go, files embedded in binary. SPA adds complexity (npm, build, bundle size). SSR sufficient for member CRUD. |
+| **Form submission** | POST to `/members` (HTML form) + PATCH to `/api/members/{id}` (JSON) | Single form method | HTML form submission is semantically correct for SSR; existing JSON API used for edit to leverage already-built error handling. Hybrid approach minimizes code duplication. |
+| **List deactivate** | AJAX delete (fetch) without page reload | Full page reload on delete | No page reload improves UX (faster, no flicker). Fetch + DOM removal is simple with vanilla JavaScript or HTMX. |
+| **Deactivated member data in list** | Exclude from `GetMembersUC` (already filters to active members) | Include with "deactivated" badge | GetMembers already returns active only (per CONSTITUTION: "deactivate = soft delete, hidden from list"). Simplifies template; no conditional rendering needed. |
+| **Accessibility approach** | Manual verification + WCAG 2.1 AA target per docs/ui.md | Automated axe-core tests | CONSTITUTION v1 does not require automated a11y testing. Manual verification plus semantic HTML, ARIA labels, and keyboard nav per `docs/ui.md` is sufficient. Axe-core deferred to v2. |
+| **Error handling in forms** | Re-render form with error message and form values pre-filled | Redirect to error page | Pre-filled re-render allows user to fix single field and resubmit (UX-friendly). Existing use case validation already structured for this. |
+| **Response after add/edit** | Redirect to `/members` (show success in context) | Redirect to detail page (show member solo) | Redirect to list allows user to confirm member appears and see context (other team members). Simpler navigation flow. Detail page deferred to future increment. |
 
 ---
 
-## Implementation Readiness
-
-All planning decisions recorded. File-level scope clear (14 new files, 4 modified, 4 touched, 1 deleted). Dependency graph acyclic. Test strategy defined per subtask. Ready for implementation using tidy, tdd-red, tdd-green, refactor skills.
-
+**Next step:** Wait for approval of plan.md. On approval, load the `4dc-implement` skill to scaffold implementation.md and populate the task queue.

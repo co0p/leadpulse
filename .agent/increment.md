@@ -1,101 +1,62 @@
-# Increment: Web App Shell (Foundation for SPA)
-
-**Date:** 2026-09-16
-
----
+# Increment: Members Screen SPA
 
 ## Use Case
 
-When I load the web app in my browser, I want to see a professional, accessible layout with a persistent sidebar, top navigation bar featuring a centered search bar, and content area, so that I have a foundation for building screens and the app feels polished from the start.
-
----
+When I navigate to the Members screen in the web app, I want to view all active team members, add new members via a dedicated page, edit or deactivate existing members, so that my team roster is always accurate and I can manage members efficiently in the browser.
 
 ## Goal
 
-Build the web app shell with sidebar, top bar (with centered search), and main content area using HTMX + Alpine.js + Go templates + Bulma CSS.
-
----
+Build the Members screen as a browser-rendered SPA page with human-friendly URLs, backed by the existing Members API, replacing the Fyne Settings screen for member management.
 
 ## Branch
 
-`increment/web-app-shell`
-
----
+`increment/members-screen-spa`
 
 ## Acceptance Criteria
 
-1. **AC-1: Shell Layout** — The shell renders with 3 regions (aside/sidebar, header/top bar, main/content section); each region displays placeholder content; full height layout fills viewport (`height: 100vh`)
-
-2. **AC-2: Sidebar Component** — Fixed-width sidebar (260px desktop, 72px collapsed state); displays app logo, primary nav links (Home, Settings, Alerts, Reports placeholder items), collapsible nav section (e.g., "Tools" group), and footer action button; scrolls internally if needed
-
-3. **AC-3: Top Bar Component** — Fixed-height sticky top bar (56px); layout uses `display: flex` with three regions:
-   - **Left region:** Sidebar toggle button (visible on mobile), context breadcrumb/label
-   - **Center region:** Search input (flexes to fill available space) with search icon inside
-   - **Right region:** Quick action icons (optional placeholders for future use)
-
-4. **AC-4: Main Content Area** — Flexible width content section with `overflow-y: auto` and 1rem/1.25rem padding; displays breadcrumb row, title with metadata, action row (primary + secondary buttons), and card/box content blocks; min-width: 0 prevents flex child overflow
-
-5. **AC-5: Responsive Behavior** — Desktop (≥1024px): sidebar fixed/visible, search bar full width in center; Tablet/mobile (<1024px): sidebar becomes overlay drawer with toggle, search bar shrinks but remains centered; Small screens (<768px): tighter spacing, compact search with icon only (label hidden); Layout reflows correctly without horizontal scroll
-
-6. **AC-6: Accessibility** — Semantic HTML regions (aside, header, main); aria-expanded on collapsible controls; search input has accessible label (visible or aria-label); keyboard support (Esc closes drawer/dropdowns, Tab navigates through top bar regions); visible focus states on all interactive elements; tested with keyboard navigation
-
-7. **AC-7: Browser Verification** — `curl http://localhost:8080/` or `http://localhost:8080/shell` serves the shell page; browser loads without errors; Bulma CSS renders correctly; search bar appears centered in top bar; no JavaScript console errors
-
----
+1. **Members list page** (`/members`) displays all active members in a responsive table with columns: Name, Seniority, Actions (Edit, Deactivate)
+2. **Add member page** (`/members/add`) provides a form to create a new member; on success, redirects to `/members` list
+3. **Edit member page** (`/members/{id}/edit`) loads existing member data and allows updates; on success, redirects to `/members` list
+4. **Deactivate action** on list removes member from list immediately (soft delete via API); list updates without full page reload
+5. **Form validation** blocks submission with descriptive errors for missing/invalid fields (name required, seniority required, name length ≤ 100 chars)
+6. **All changes persist** across browser reloads and app restarts (database-backed via SQLite)
+7. **Responsive layout** works on desktop (≥1024px), tablet (769–1023px), and mobile (≤768px) per `docs/ui.md` breakpoints
+8. **Accessibility** meets WCAG 2.1 AA: semantic HTML, ARIA labels, keyboard navigation, focus states per shell design system
 
 ## Acceptance-Test Intent
 
-User journey verification (browser-based):
+**User journey:**
+1. User opens `/members`, sees list of 3 existing members
+2. Clicks "Add Member" button, navigates to `/members/add`
+3. Fills form: first name, last name, seniority; submits
+4. Redirected to `/members`, sees new member in list
+5. Clicks "Edit" on a member, navigates to `/members/{id}/edit`
+6. Updates seniority, saves; redirected to list
+7. Clicks "Deactivate", member removed from list without page reload
+8. Reloads page; member still deactivated (persistence verified)
 
-1. **Load shell** → User opens browser to app URL → sees full shell layout with centered search in top bar (sidebar, top bar with search, content area)
-2. **Search interaction** → User clicks in search input → can type without JavaScript errors; placeholder text visible
-3. **Mobile sidebar toggle** → User clicks sidebar toggle on mobile → drawer slides in from left; search bar width adjusts but remains centered
-4. **Quick actions** → User clicks quick action icon placeholders → no errors (placeholders for future features)
-5. **Responsive resize** → User resizes browser window mobile → desktop → mobile → layout responds, search bar re-centers without breakage
-6. **Keyboard Esc** → User presses Esc key → any open drawer/dropdown closes
-7. **Keyboard Tab** → User tabs through interactive elements → can tab into search bar; focus visible; tab order logical (toggle → search → action icons)
+## Out Of Scope
 
----
-
-## Out of Scope
-
-- Search functionality backend (search API endpoint; that's a future increment)
-- Profile management, login, logout (v2)
-- Settings screen implementation (next increment after shell)
-- Other feature screens (Home, Alerts, Reports)
-- Backend API endpoints beyond serving shell HTML
-- Persistent sidebar state (collapse preference stored)
-- Animation/transitions
-- Dark mode (v2)
-- Drag-and-drop sidebar customization
-
----
+- Import/export members (CSV)
+- Member search or filtering (simple list only)
+- Reactivating deactivated members (deactivation is permanent in this increment)
+- Member notes, email, or custom fields (name + seniority only)
+- Bulk operations (add/edit/deactivate one at a time)
+- Role-based access control (all users have full member management access)
 
 ## Constitution Constraints
 
-- HTTP handler serves shell template (thin adapter, no business logic)
-- All SPA assets embedded in binary via `embed.FS`
-- Use Go `html/template` for HTML; HTMX for interactivity; Alpine.js for client state
-- Bulma CSS framework for styling (no custom CSS beyond layout glue)
-- Search input wired to Alpine state (no backend calls in this increment)
-- All tests pass with `-race` flag
-- No new external dependencies beyond Bulma (already in ADR-20260915-spa-frontend-stack.md)
-- Accessibility requirements (WCAG 2.1 AA target)
-
----
+- **Behavior first:** Form validation and persistence logic has unit tests before UI renders
+- **Dependency direction:** Routes → HTTP handlers → coordinator → service → store → engine (no reverse imports)
+- **Small, focused changes:** Screen is a single increment; logic stays in coordinator reusable by CLI/API
+- **Human review:** No auto-generated UX; all navigation human-readable URLs
+- **Performance:** List load + add/edit/deactivate round-trip ≤ 200ms on local machine (per performance envelope in CONSTITUTION)
+- **Service is API contract:** Handlers delegate to coordinator; SPA is replaceable presentation layer
 
 ## Roadmap Entry
 
-**Feature:** Web App Shell (Foundation for SPA)
-
-**Job Story:** When I load the web app, I want to see a professional layout with sidebar and centered search bar, so that I have a foundation for all screens
-
-**Status:** Planned → Partial
+**Members Screen (SPA):** When I manage my team roster through the web browser, I want surfable, bookmarkable URLs for adding and editing members, so that the interface feels like a professional web app, not a modal-heavy desktop tool.
 
 ---
 
-## Next Steps
-
-1. Write `docs/plan.md` with detailed technical execution plan
-2. Create branch: `git checkout -b increment/web-app-shell`
-3. Begin implementation following plan.md (TDD-Red phase or tidy phase depending on architecture)
+**Next step:** Load `4dc-plan` skill to convert this increment into a technical execution plan.

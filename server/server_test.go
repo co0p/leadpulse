@@ -207,7 +207,7 @@ func TestSidebarComponentRenders(t *testing.T) {
 	if !contains(body, "Leadpulse") {
 		t.Error("sidebar missing logo/branding")
 	}
-	if !contains(body, "Home") || !contains(body, "Settings") {
+	if !contains(body, "Home") || !contains(body, "Members") {
 		t.Error("sidebar missing nav links")
 	}
 	if !contains(body, "Tools") {
