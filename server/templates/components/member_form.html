@@ -1,0 +1,71 @@
+{{/* member_form.html — reusable form fields for add and edit member pages */}}
+{{/* Expects: .Member (if edit mode, pre-fill values; if add mode, omit or use empty) */}}
+
+<!-- First Name -->
+<div class="field">
+    <label class="label" for="firstName">First Name</label>
+    <div class="control has-icons-left">
+        <input 
+            class="input" 
+            type="text" 
+            id="firstName" 
+            name="firstName" 
+            placeholder="John"
+            maxlength="100"
+            required
+            {{if .Member}}value="{{.Member.FirstName}}"{{end}}
+            aria-label="Member first name"
+        >
+        <span class="icon is-left">
+            <i class="fas fa-user"></i>
+        </span>
+    </div>
+    <p class="help">First name of the team member</p>
+</div>
+
+<!-- Last Name -->
+<div class="field">
+    <label class="label" for="lastName">Last Name</label>
+    <div class="control has-icons-left">
+        <input 
+            class="input" 
+            type="text" 
+            id="lastName" 
+            name="lastName" 
+            placeholder="Doe"
+            maxlength="100"
+            required
+            {{if .Member}}value="{{.Member.LastName}}"{{end}}
+            aria-label="Member last name"
+        >
+        <span class="icon is-left">
+            <i class="fas fa-user"></i>
+        </span>
+    </div>
+    <p class="help">Last name of the team member</p>
+</div>
+
+<!-- Seniority -->
+<div class="field">
+    <label class="label" for="seniority">Seniority</label>
+    <div class="control has-icons-left">
+        <div class="select is-fullwidth">
+            <select 
+                id="seniority" 
+                name="seniority" 
+                required 
+                aria-label="Member seniority level"
+            >
+                <option value="">— Select seniority —</option>
+                <option value="junior" {{if eq .Member.Seniority "junior"}}selected{{end}}>Junior</option>
+                <option value="mid" {{if eq .Member.Seniority "mid"}}selected{{end}}>Mid-Level</option>
+                <option value="senior" {{if eq .Member.Seniority "senior"}}selected{{end}}>Senior</option>
+                <option value="lead" {{if eq .Member.Seniority "lead"}}selected{{end}}>Lead</option>
+            </select>
+        </div>
+        <span class="icon is-left">
+            <i class="fas fa-briefcase"></i>
+        </span>
+    </div>
+    <p class="help">Seniority level helps contextualize impact expectations</p>
+</div>
