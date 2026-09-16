@@ -24,14 +24,21 @@ commit: 0e868f9 — tidy: update sidebar link from Settings to Members
 
 ### 2. Scaffold templates directory and member form component
 type: tidy
-state: pending
+state: complete
 files:
   - server/templates/members/ (new directory)
   - server/templates/components/member_form.html (new file)
+evidence: |
+  All tests passing: `go test -race ./...` → 10 packages, 0 failures
+  Created server/templates/members/ directory (parent for list.html, add.html, edit.html)
+  Created server/templates/components/member_form.html with reusable form fields (firstName, lastName, seniority select)
+  Form component includes ARIA labels, client-side validation (required, maxlength), and conditional pre-fill for edit mode
+  No behavior change; no logic changes.
+commit: e8bac45 — tidy: scaffold members template directory and reusable form component
 
 ### 3. Add HTTP handler for GET /members (list page)
 type: behavior
-state: pending
+state: in_progress
 files:
   - server/handler_members.go
   - server/handler_members_test.go
@@ -39,7 +46,7 @@ tests:
   - id: handler-get-members-success
     name: TestHandlerGetMembersPage_ReturnsHTMLWithMembers
     file: server/handler_members_test.go
-    state: pending
+    state: red
   - id: handler-get-members-empty
     name: TestHandlerGetMembersPage_EmptyListWorks
     file: server/handler_members_test.go
@@ -49,6 +56,11 @@ tests:
     file: server/handler_members_test.go
     state: pending
 active_test: handler-get-members-success
+test_evidence: |
+  Test: server/handler_members_test.go:379 — TestHandlerGetMembersPage_ReturnsHTMLWithMembers
+  Failure reason: undefined: HandlerGetMembersPage
+  Expected behavior: handler calls GetMembersUC.Execute(), renders HTML template with member data
+  Status: RED (fails for the right reason — function doesn't exist yet)
 
 ### 4. Create members list template (list.html)
 type: behavior

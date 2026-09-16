@@ -346,3 +346,66 @@ func TestDeleteMemberHandler_NotFound(t *testing.T) {
 		t.Errorf("expected error kind 'validation_error', got '%s'", errBody.Kind)
 	}
 }
+
+// TestHandlerGetMembersPage_ReturnsHTMLWithMembers verifies GET /members renders HTML with member list
+func TestHandlerGetMembersPage_ReturnsHTMLWithMembers(t *testing.T) {
+	// Create mock use case that returns 2 members
+	getMembersUC := &mockGetMembersUseCase{
+		members: []members.MemberDTO{
+			{
+				ID:        1,
+				FirstName: "Alice",
+				LastName:  "Smith",
+				Seniority: "senior",
+				Status:    "Active",
+				CreatedAt: time.Now(),
+			},
+			{
+				ID:        2,
+				FirstName: "Bob",
+				LastName:  "Johnson",
+				Seniority: "mid",
+				Status:    "Active",
+				CreatedAt: time.Now(),
+			},
+		},
+	}
+
+	// Create HTTP request
+	req := httptest.NewRequest(http.MethodGet, "/members", nil)
+
+	// Record response
+	w := httptest.NewRecorder()
+
+	// Call handler (stub — will fail)
+	HandlerGetMembersPage(w, req, getMembersUC)
+
+	// Verify response is HTML
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/html; charset=utf-8" {
+		t.Errorf("expected Content-Type 'text/html; charset=utf-8', got '%s'", contentType)
+	}
+
+	body := w.Body.String()
+	if body == "" {
+		t.Error("expected non-empty response body")
+	}
+
+	// Verify member names appear in HTML
+	if !contains(body, "Alice") || !contains(body, "Smith") {
+		t.Error("expected member Alice Smith in HTML response")
+	}
+
+	if !contains(body, "Bob") || !contains(body, "Johnson") {
+		t.Error("expected member Bob Johnson in HTML response")
+	}
+
+	// Verify seniority levels appear
+	if !contains(body, "senior") || !contains(body, "mid") {
+		t.Error("expected seniority levels in HTML response")
+	}
+}

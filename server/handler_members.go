@@ -234,3 +234,42 @@ func memberIDToUUID(memberID int64) string {
 	namespace := uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8") // UUID v5 namespace
 	return uuid.NewSHA1(namespace, []byte(fmt.Sprintf("member:%d", memberID))).String()
 }
+
+// HandlerGetMembersPage handles GET /members (HTML page)
+func HandlerGetMembersPage(w http.ResponseWriter, r *http.Request, getMembersUC GetMembersUC) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Call use case to get all active members
+	output, err := getMembersUC.Execute()
+	if err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "<html><body><h1>Error</h1><p>Failed to load members: %s</p></body></html>", err.Error())
+		return
+	}
+
+	// Simple HTML response with member list
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+
+	// Build HTML response
+	html := "<html><head><title>Members</title></head><body>"
+	html += "<h1>Members</h1>"
+
+	if len(output.Members) == 0 {
+		html += "<p>No members found</p>"
+	} else {
+		html += "<table border='1'><tr><th>Name</th><th>Seniority</th></tr>"
+		for _, m := range output.Members {
+			html += fmt.Sprintf("<tr><td>%s %s</td><td>%s</td></tr>", m.FirstName, m.LastName, m.Seniority)
+		}
+		html += "</table>"
+	}
+
+	html += "</body></html>"
+
+	fmt.Fprint(w, html)
+}
