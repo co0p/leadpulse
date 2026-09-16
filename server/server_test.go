@@ -1,6 +1,7 @@
 package server
 
 import (
+	"html/template"
 	"io"
 	"io/fs"
 	"net/http"
@@ -16,39 +17,50 @@ func TestEmbedAssets(t *testing.T) {
 		t.Fatalf("failed to open dist directory: %v", err)
 	}
 
-	// Verify index.html exists in the embedded FS
-	indexFile, err := Assets.Open("dist/index.html")
+	// Verify templates directory exists in the embedded FS
+	_, err = Assets.Open("templates")
 	if err != nil {
-		t.Fatalf("index.html not found in embedded FS: %v", err)
+		t.Fatalf("templates directory not found in embedded FS: %v", err)
 	}
-	defer indexFile.Close()
 
-	// Verify index.html has content
-	content, err := io.ReadAll(indexFile)
+	// Verify layout.html exists in the embedded FS
+	layoutFile, err := Assets.Open("templates/layout.html")
 	if err != nil {
-		t.Fatalf("failed to read index.html: %v", err)
+		t.Fatalf("layout.html not found in embedded FS: %v", err)
+	}
+	defer layoutFile.Close()
+
+	// Verify layout.html has content
+	content, err := io.ReadAll(layoutFile)
+	if err != nil {
+		t.Fatalf("failed to read layout.html: %v", err)
 	}
 
 	if len(content) == 0 {
-		t.Fatal("index.html is empty")
+		t.Fatal("layout.html is empty")
 	}
 
 	if !contains(string(content), "Team Impact Scorecard") {
-		t.Error("index.html does not contain expected content")
+		t.Error("layout.html does not contain expected content")
 	}
 }
 
-// TestRootHandlerWithEmbedFS verifies that a GET request to / returns embedded content.
-func TestRootHandlerWithEmbedFS(t *testing.T) {
-	// Create the dist filesystem just like Start() does
-	distFS, err := fs.Sub(Assets, "dist")
+// TestRootHandlerWithTemplate verifies that a GET request to / returns templated HTML.
+func TestRootHandlerWithTemplate(t *testing.T) {
+	// Parse the shell template
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
 	if err != nil {
-		t.Fatalf("failed to extract dist: %v", err)
+		t.Fatalf("failed to parse template: %v", err)
 	}
 
-	// Create a handler similar to what Start() creates
+	// Create a handler that serves the template
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.FS(distFS)))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := tmpl.Execute(w, nil); err != nil {
+			http.Error(w, "Template error", http.StatusInternalServerError)
+		}
+	})
 
 	// Create a test request for the root path
 	req := httptest.NewRequest("GET", "/", nil)
@@ -57,48 +69,55 @@ func TestRootHandlerWithEmbedFS(t *testing.T) {
 	// Serve the request
 	mux.ServeHTTP(w, req)
 
-	// The response may be a redirect or a 200; just verify we got a response
-	if w.Code < 200 || w.Code >= 400 {
-		t.Logf("GET / returned status %d (acceptable for directory listing)", w.Code)
+	// Verify we got a 200 OK response
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET / returned status %d, expected 200", w.Code)
+	}
+
+	// Verify the response contains HTML content
+	body := w.Body.String()
+	if !contains(body, "<!DOCTYPE html>") {
+		t.Error("response does not contain DOCTYPE")
+	}
+
+	if !contains(body, "Team Impact Scorecard") {
+		t.Error("response does not contain expected title")
+	}
+
+	if !contains(body, "<header") {
+		t.Error("response does not contain header element")
+	}
+
+	if !contains(body, "<aside") {
+		t.Error("response does not contain aside/sidebar element")
+	}
+
+	if !contains(body, "<main") {
+		t.Error("response does not contain main content element")
 	}
 }
 
-// TestIndexHTMLDirect verifies that we can serve index.html directly from the distFS.
-func TestIndexHTMLDirect(t *testing.T) {
-	// Create the dist filesystem like Start() does
-	distFS, err := fs.Sub(Assets, "dist")
+// TestLayoutHTMLDirect verifies that we can parse layout.html directly from the embedded FS.
+func TestLayoutHTMLDirect(t *testing.T) {
+	// Parse the layout template
+	tmpl, err := template.ParseFS(Assets, "templates/layout.html")
 	if err != nil {
-		t.Fatalf("failed to extract dist: %v", err)
+		t.Fatalf("failed to parse layout.html from embedded FS: %v", err)
 	}
 
-	// Open index.html from the distFS
-	indexFile, err := distFS.Open("index.html")
-	if err != nil {
-		t.Fatalf("failed to open index.html from distFS: %v", err)
-	}
-	defer indexFile.Close()
-
-	// Verify the content
-	content, err := io.ReadAll(indexFile)
-	if err != nil {
-		t.Fatalf("failed to read index.html: %v", err)
+	// Verify template is not nil
+	if tmpl == nil {
+		t.Fatal("layout template is nil")
 	}
 
-	if len(content) == 0 {
-		t.Fatal("index.html content is empty")
-	}
-
-	if !contains(string(content), "<!DOCTYPE html>") {
-		t.Error("index.html is not valid HTML")
-	}
-
-	if !contains(string(content), "Team Impact Scorecard") {
-		t.Error("index.html missing expected content")
+	// Verify template name
+	if tmpl.Name() != "layout.html" {
+		t.Errorf("template name is %q, expected layout.html", tmpl.Name())
 	}
 }
 
-// TestFileServerWithDistFS verifies FileServer can serve files from distFS.
-func TestFileServerWithDistFS(t *testing.T) {
+// TestStaticAssetsServer verifies FileServer can serve assets from dist/.
+func TestStaticAssetsServer(t *testing.T) {
 	// Create the dist filesystem
 	distFS, err := fs.Sub(Assets, "dist")
 	if err != nil {
@@ -108,28 +127,22 @@ func TestFileServerWithDistFS(t *testing.T) {
 	// Create a file server like Start() does
 	fileServer := http.FileServer(http.FS(distFS))
 
-	// Create a test request for index.html
-	req := httptest.NewRequest("GET", "/index.html", nil)
+	// Test CSS file
+	req := httptest.NewRequest("GET", "/css/bulma.min.css", nil)
 	w := httptest.NewRecorder()
-
 	fileServer.ServeHTTP(w, req)
 
-	// Verify we got a response (may be a redirect or 200)
-	if w.Code == http.StatusNotFound {
-		t.Fatalf("index.html not found in file server: status %d", w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /css/bulma.min.css returned status %d, expected 200", w.Code)
 	}
 
-	if w.Code == http.StatusMovedPermanently || w.Code == http.StatusFound {
-		// FileServer redirects directory requests; this is acceptable
-		t.Logf("FileServer returned redirect status %d (acceptable)", w.Code)
-		return
-	}
+	// Test JavaScript file
+	req = httptest.NewRequest("GET", "/js/alpine.min.js", nil)
+	w = httptest.NewRecorder()
+	fileServer.ServeHTTP(w, req)
 
-	if w.Code == http.StatusOK {
-		body := w.Body.String()
-		if !contains(body, "Team Impact Scorecard") {
-			t.Error("response missing expected content")
-		}
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /js/alpine.min.js returned status %d, expected 200", w.Code)
 	}
 }
 

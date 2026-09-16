@@ -269,7 +269,7 @@
     </style>
 </head>
 <body x-data="shellState()" @keydown.escape="closeSidebar()">
-    <div class="topbar" role="banner">
+    <header class="topbar" role="banner">
         <div class="topbar-left">
             <button class="button is-white sidebar-toggle" type="button" aria-label="Toggle sidebar" :aria-expanded="sidebarOpen" @click="toggleSidebar()">
                 <span class="icon">
@@ -306,7 +306,7 @@
                 </button>
             </div>
         </div>
-    </div>
+    </header>
 
     <div class="app-container">
         <aside class="sidebar" :class="{ 'is-active': sidebarOpen }" role="navigation">
