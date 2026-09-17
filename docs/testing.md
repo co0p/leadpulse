@@ -1,270 +1,298 @@
-# Testing
+# Testing Strategy
 
-Testing practices for Team Impact Scorecard. The service layer is the primary testability boundary: use cases can be tested without Fyne by passing a mock store. The formula engine is the highest-risk component; incorrect scoring or alert thresholds produce bad people decisions. The test strategy gives near-complete confidence in engine and service correctness with fast feedback, while accepting lower automated coverage for the UI layer.
-
----
-
-## Testing Approach and Rationale
-
-The system has four layers with different risk profiles:
-
-- **`engine/`** — pure functions, deterministic, no I/O. The formulas in the PRD are the specification. Any divergence is a bug. This layer must have comprehensive unit tests because errors here silently corrupt people decisions. Tests run in milliseconds, have no dependencies, and are the primary correctness gate.
-- **`service/`** — use cases (transactions). Each use case fetches aggregates via repository, calls domain services and `engine`, and persists results via repository. The service layer is the API contract. Unit tests inject in-memory repository implementations (no database needed) and real `engine` functions. Service tests verify that use cases call repository and domain service methods in the right order with the right data. Service tests prove that UI is replaceable: any presentation layer (Fyne, CLI, web) can call the same `service/` interfaces and behave identically.
-- **`store/`** — repository implementations (SQLiteTeamMemberRepository, SQLiteMonthlyEntryRepository) that persist and retrieve aggregates from SQLite. Risk is data loss, constraint violations, incorrect reads of historical data (which affect trend calculations), and audit trail correctness. Integration tests against an in-memory SQLite database (`":memory:"` DSN) cover all CRUD paths and aggregate reconstruction.
-- **`ui/`** — Fyne widgets and views. Fyne does not have reliable headless test support. Manual verification is pragmatic for v1. Acceptance criteria in `.agent/increment.md` are manual user stories, not automated suites.
+Multi-service architecture testing across three layers: backend unit tests, frontend tests, and end-to-end acceptance tests.
 
 ---
 
-## Choosing Test Depth
+## Testing Pyramid
 
-**Engine unit tests:** Write when:
-- A formula, normalization, threshold, or computation rule from the PRD is being implemented or changed.
-- A new alert condition is added.
-- A trend calculation is introduced (MA3, Delta1, Delta3, Vol3, dimension deltas).
-- A business rule is encoded (e.g., guardrail logic).
-
-**Domain service unit tests (engine/domain/):** Write when:
-- A new domain service is implemented (e.g., `ValidationService`, `ScoringService`).
-- A domain service method enforces a new business rule or cross-aggregate constraint.
-- A domain service's rule logic changes.
-
-**Service unit tests:** Write when:
-- A new use case is implemented (e.g., `AddMember`, `SubmitMonthlyEntry`, `GenerateAlerts`).
-- A use case's logic changes (order of operations, new calls to `store` or `engine`, new validations).
-- A use case's error handling is added or changed.
-- A use case's integration with domain services changes.
-
-**Store integration tests:** Write when:
-- A new store function is added (read, write, update, delete).
-- A schema migration is introduced.
-- A query aggregates or joins data across months or members.
-- Soft-delete, audit trail, or constraint logic is added.
-
-**HTTP handler tests (JSON API and SPA screens):** Write when:
-- A new API endpoint is added (JSON API).
-- A new SPA screen page is added (`/members`, `/members/add`, `/members/{id}/edit`, etc.).
-- A handler's logic changes (use case delegation, response mapping, error handling).
-- A form submission handler is added (validation, redirect, error re-rendering).
-
-**UI manual verification:** Required when:
-- A screen is added or its layout changes.
-- A new interaction pattern is introduced (e.g., new form, new table, new dialog).
-- JavaScript interactivity is added (AJAX, form validation, dynamic DOM updates).
-- Responsive breakpoint behavior changes.
-- Accessibility features change (keyboard nav, focus outlines, ARIA labels, color contrast).
-- See acceptance criteria in `.agent/increment.md` for manual test scenarios.
-
-**No new test needed when:**
-- Renaming a variable or extracting a helper with identical behavior.
-- Changing UI colors, fonts, or widget positioning (not behavior) in inline CSS.
-- Adding a log statement or comment.
+```
+        /\
+       /  \  Acceptance Tests (Playwright)
+      /----\  Cross-service validation; slow; few scenarios
+     /      \
+    /        \
+   /----------\
+  /  Frontend  \ Vue component tests (npm test)
+ /   Tests     \ Faster; single-service logic
+/              \
+/________________\
+Backend Unit Tests (go test)
+Fastest; core business logic; hexagonal architecture
+```
 
 ---
 
-## Test Design Conventions
+## Layer 1: Backend Unit Tests
 
-**Engine tests:**
-- Live in `engine/<file>_test.go`, alongside the function under test.
-- Function names: `Test<FunctionName>_<scenario>`. Example: `TestNormalizeMorale_midRange`, `TestAlertBurnout_redThreshold`.
-- Each case states input, expected output, and the PRD section it covers in a comment.
-- Table-driven tests preferred for formula coverage — one table per function, rows per boundary condition.
+**Technology:** Go `testing` package with `go test -race`
 
-**Service tests:**
-- Live in `service/<domain>/<file>_test.go`, alongside the use case.
-- Function names: `Test<UseCaseName>_<scenario>`. Example: `TestAddMember_createsAndReturns`, `TestCreateEntry_validatesActiveMember`.
-- Use in-memory repository implementations (InMemoryTeamMemberRepository, InMemoryMonthlyEntryRepository) — no database dependency. Real `engine` functions and domain services (no mocks).
-- Each test: create an in-memory repository, inject it into the service, set up fixtures via repository, call the use case, verify repository state and return values.
-- Verify error cases: invalid input, repository errors, domain service rule violations (e.g., inactive member, duplicate entry), engine validation failures.
-- Example: for CreateMonthlyEntry, test that calling with an inactive member fails before calling repository.Save().
+**Location:** `services/backend/**/*_test.go`
 
-**Domain service tests (engine/domain/):**
-- Live in `engine/domain/<service>_test.go`, alongside the domain service implementation.
-- Function names: `Test<ServiceName>_<scenario>`. Example: `TestValidationService_rejectsDuplicate`, `TestScoringService_validatesRange`.
-- Use in-memory repository implementations exclusively (InMemoryTeamMemberRepository, InMemoryMonthlyEntryRepository) — no database or store package imports.
-- Each test: create in-memory repositories, inject into domain service constructor, set up test data via repository, call domain service methods, verify rule enforcement without database access.
-- Verify business rule enforcement: uniqueness constraints, cross-aggregate invariants, state consistency, value range validation.
-- Domain services never require database access during testing. If a domain service test needs a database, the test design is wrong; refactor the dependency injection.
-- **Canonical pattern:**
-  ```go
-  // Create in-memory repositories
-  memberRepo := domain.NewInMemoryTeamMemberRepository()
-  entryRepo := domain.NewInMemoryMonthlyEntryRepository()
-  
-  // Create domain service with repository dependencies
-  service := domain.NewValidationService(memberRepo, entryRepo)
-  
-  // Set up test fixtures via repository (no SQL)
-  member, _ := domain.NewTeamMember(1, name, seniority)
-  memberRepo.Save(member)
-  
-  // Call domain service and verify rule enforcement
-  err := service.ValidateTeamMemberUniqueness(member)
-  // Assert error as expected
-  ```
+**Scope:**
+- Core domain logic (`core/members/`, `engine/scoring/`, etc.)
+- Repository adapters (SQLite and in-memory implementations)
+- Use cases (business logic orchestration)
+- Service coordinators
 
-**Store integration tests:**
-- Live in `store/<file>_test.go`, alongside the function under test.
-- Use `":memory:"` as the SQLite DSN. No test writes to disk.
-- Each test: create fixtures via store methods, verify state in the database, verify audit trail entries.
-- Cover happy path and constraint violations (foreign keys, NOT NULL, unique constraints).
-- **Standard helper: `setupTestDB()`** — initializes an in-memory SQLite database with the full schema applied. All store tests must call `setupTestDB()` before creating fixtures. This ensures test isolation and consistent schema versioning across all tests. See `store/member_test.go` for the reference implementation.
+**Run locally:**
+```bash
+make test-backend
+# or
+cd services/backend && go test -race ./...
+```
 
-**HTTP handler tests (JSON API):**
-- Live in `server/<file>_test.go` (e.g., `server/handler_members_test.go`).
-- Use `net/http/httptest.NewRecorder()` to capture HTTP responses without starting a real server.
-- Use hand-written mock coordinators (mock struct implementing the coordinator interface) — no mocking library overhead.
-- Each test: mock the coordinator, create an HTTP request, call the handler, verify HTTP status code and JSON response body.
-- Cover success case and all error cases: validation errors (400), not-found (404), database failures (500).
-- Handler tests are fast (no database access, no I/O), isolated (each test mocks its dependencies), and independent of other handler tests.
-- **Canonical pattern:**
-   ```go
-   // Mock coordinator with test fixture
-   mockCoord := &MockMemberAPICoordinator{
-     members: []domain.TeamMember{ /* fixture */ },
-     err:     nil, // or an error for error cases
-   }
+**Run in CI (Docker):**
+- Test stage of backend Dockerfile runs `go test -race ./...` before build
+- If tests fail, docker build stops immediately (fail-fast)
+- No binary produced if tests fail
 
-   // Create HTTP request
-   req := httptest.NewRequest("GET", "/api/members", nil)
-   w := httptest.NewRecorder()
+**Key characteristics:**
+- In-memory test repository for speed (no database I/O per test)
+- Race detector enabled (`-race` flag)
+- Comprehensive coverage of business logic branches
+- Fast feedback loop (< 10 seconds typical)
 
-   // Call handler
-   HandlerGetMembers(w, req, mockCoord)
-
-   // Verify HTTP response
-   if w.Code != http.StatusOK {
-     t.Errorf("expected 200, got %d", w.Code)
-   }
-   var resp map[string][]interface{}
-   json.NewDecoder(w.Body).Decode(&resp)
-   // Assert response structure and data
-   ```
-
-**Server-rendered template tests (SPA screens):**
-- Live in `server/<file>_test.go` (e.g., `server/handler_members_test.go`).
-- **Approach:** Each SPA screen handler is tested by mocking the use case, executing the handler, and verifying the HTML output (status code, template rendering, presence of expected elements).
-- Use `net/http/httptest.NewRecorder()` to capture HTML responses without starting a real server.
-- Use hand-written mock use cases (mock struct implementing the use case interface) — no mocking library overhead.
-- **Layers tested:**
-  - **Handler layer:** Unit tests mock use cases and verify handler correctly calls the use case, maps output to template data, and renders the template. Verify HTTP status codes and HTML output.
-  - **Template layer:** Verify HTML structure (semantic tags, form fields, links, buttons) by parsing response body with `html/template` or string matching. No browser or Playwright needed for unit tests.
-  - **Accessibility layer:** Verify semantic HTML (form labels, button aria-labels, heading hierarchy) and CSS (inline or media queries). Manual browser verification for keyboard navigation, focus outlines, color contrast.
-  - **Responsive layout:** Verify CSS media queries in templates via code inspection. Manual browser verification at three viewport sizes (desktop ≥1024px, tablet 769–1023px, mobile ≤768px).
-- **What is NOT tested automatically:**
-  - JavaScript interactivity (AJAX deactivate, form validation). Tested manually via browser or Playwright end-to-end tests (v2+).
-  - Dynamic CSS rendering. Templates use static inline CSS; no CSS-in-JS framework.
-- **Canonical pattern for SPA screen handler tests:**
-   ```go
-   // Mock use case with test fixture
-   mockUC := &MockGetMembersUseCase{
-     members: []domain.TeamMember{ /* fixture */ },
-     err:     nil, // or an error for error cases
-   }
-
-   // Create HTTP request
-   req := httptest.NewRequest("GET", "/members", nil)
-   w := httptest.NewRecorder()
-
-   // Call handler
-   HandlerGetMembersPage(w, req, mockUC)
-
-   // Verify HTTP response and HTML structure
-   if w.Code != http.StatusOK {
-     t.Errorf("expected 200, got %d", w.Code)
-   }
-   body := w.Body.String()
-   
-   // Verify HTML contains expected elements
-   if !strings.Contains(body, "<table") {
-     t.Error("expected table element in HTML")
-   }
-   if !strings.Contains(body, "John") {
-     t.Error("expected member name in HTML")
-   }
-   if !strings.Contains(body, "href=\"/members/1/edit\"") {
-     t.Error("expected edit link for member")
-   }
-   
-   // For error cases, verify error message or fallback HTML
-   ```
-- **For form handlers (POST/PATCH):** Test form parsing, validation error handling (re-render form with error message), and success redirect behavior separately from template rendering.
-- **Coverage goal:** All SPA screen handlers have unit tests that prove correct use case delegation, HTML output, and error handling. Template files are the source of truth for styling and layout; code tests verify structure only.
-
-**All tests:**
-- Must not share mutable state. Each test case sets up its own fixtures.
-- Test must be independent: can run in any order, can run in parallel with `-race`.
+**Test naming convention:**
+- Test function: `TestUseCaseName_ScenarioDescription`
+- Example: `TestAddMember_Success`, `TestAddMember_InvalidInput`, `TestGetMembers_EmptyList`
 
 ---
 
-## Running the Checks
+## Layer 2: Frontend Tests
+
+**Technology:** Vue Testing Library + Vitest (future setup)
+
+**Location:** `services/frontend/src/**/*.spec.ts` (to be implemented in next increment)
+
+**Scope:**
+- Vue component rendering (AppShell, etc.)
+- User interactions (clicks, form inputs)
+- State management (if using Pinia)
+- API mocking (mock backend responses)
+
+**Run locally:**
+```bash
+make test-frontend
+# or
+cd services/frontend && npm test
+```
+
+**Run in CI:**
+- Integrated into frontend Docker build (separate stage if desired)
+- Can run in parallel with backend tests
+
+**Key characteristics:**
+- Component-level unit tests
+- Mock API calls (no real backend dependency)
+- Fast feedback (< 5 seconds typical)
+- Tests isolated from docker-compose services
+
+**Test naming convention:**
+- Test name: `'renders AppShell with sidebar'`, `'health indicator shows green'`
+- Pattern: human-readable behavior description
+
+**Note:** Frontend tests are scaffolded but not yet written. First acceptance tests (Playwright) will cover frontend behavior end-to-end.
+
+---
+
+## Layer 3: Acceptance Tests (E2E)
+
+**Technology:** Playwright (Chromium + Firefox)
+
+**Location:** `acceptance-tests/tests/**/*.spec.ts`
+
+**Scope:**
+- Cross-service integration; frontend + backend working together
+- User workflows (load page, check health, navigate, etc.)
+- End-to-end scenarios (realistic user journeys)
 
 **Prerequisites:**
+- Both services must be running via `docker-compose up`
+- Backend at `http://localhost:8080` (reachable from Playwright)
+- Frontend at `http://localhost:3000` (Playwright browser target)
+
+**Run locally:**
 ```bash
-go version  # requires Go 1.21+
+# Terminal 1: Start services
+make docker-up
+
+# Terminal 2: Run acceptance tests
+make test-acceptance
+
+# To use interactive UI:
+cd acceptance-tests && npm run test:ui
 ```
 
-**Fast local feedback (engine + store only):**
-```bash
-go test ./engine/... ./store/...
-```
+**Run in CI:**
+- Services already running in docker-compose
+- Acceptance tests run after both services are healthy
+- HTML report generated (test-results/)
 
-**Full test suite:**
-```bash
-go test ./...
-```
+**Configuration:** `acceptance-tests/playwright.config.ts`
+- Base URL: `http://localhost:3000` (configurable via `BASE_URL` env var)
+- Browsers: Chromium, Firefox
+- Retries: 2 in CI, 0 locally
+- Screenshots/videos: captured on failure
 
-**With race detector (run before any promotion):**
-```bash
-go test -race ./...
-```
+**First acceptance test suite:** `acceptance-tests/tests/app.spec.ts`
 
-**Verbose output (useful when debugging a specific failure):**
-```bash
-go test -v -run TestAlertBurnout ./engine/...
-```
+Three test cases:
+1. **App Shell Renders**
+   - Navigate to home
+   - Verify sidebar, topbar, footer are visible
+   - Verify main heading is present
+   - Data attributes: `[data-testid="sidebar"]`, `[data-testid="topbar"]`, `[data-testid="footer"]`
 
-**Build check (catches compile errors across all packages including ui/):**
-```bash
-go build ./...
-```
+2. **Health Indicator Shows Green**
+   - Navigate to home
+   - Wait for health check to complete (2 seconds)
+   - Verify health indicator visible and shows success tag (green)
+   - Data attribute: `[data-testid="health-indicator"]`
 
-Interpret failures: a failing engine test is a blocking defect. A failing store test is a blocking defect. A build failure is a blocking defect. All must be resolved before the change is considered complete.
+3. **No Console Errors**
+   - Navigate to home
+   - Collect console errors during page load
+   - Assert no errors in browser console
+
+**Test naming convention:**
+- Test name: `'app shell loads with sidebar, top bar, footer'`
+- Pattern: imperative behavior description
+
+**Key characteristics:**
+- Slow (30–60 seconds typical for small suite)
+- High confidence; catches integration issues
+- Validates real docker-compose setup
+- Uses explicit waits (no implicit waits)
+- Retries on timing failures
 
 ---
 
-## Evidence Required Before Merge
+## Testing Gate (Before Merge)
 
-- `go test -race ./engine/... ./service/... ./store/...` passes with no failures and no race conditions.
-- `go build ./...` succeeds.
-- For any change touching a formula, alert, or trend calculation: the relevant engine test case(s) exist and are named after the PRD section they verify.
-- For any new use case: at least one service test covers the happy path and one covers relevant error cases (invalid input, store failures).
-- For any new store function: at least one integration test covers the happy path and one covers the relevant constraint or error case.
-- For any UI screen or interaction: manual acceptance-test scenarios pass on the developer's machine (see `.agent/increment.md` for the expected user journeys).
-- Service tests prove the use case contract is stable, independent of the UI implementation.
+All three test categories must pass:
 
----
+```bash
+# Backend tests (must pass)
+make test-backend
 
-## Automation and Feedback Loops
+# Frontend tests (to be added in future increment; currently no tests)
+# make test-frontend
 
-- **Local:** `go test ./engine/... ./store/...` — run on every save or before every commit. Completes in seconds.
-- **CI (GitHub Actions):** runs `go test -race ./...` and `go build ./...` on every push and pull request. Targets: `ubuntu-latest`, `macos-latest`, `windows-latest`. A failing CI run blocks merge.
-- **Release:** same CI gate. No additional test suite for releases in v1.
+# Acceptance tests (require docker-compose up running)
+make docker-up
+make test-acceptance
+make docker-down
+```
 
-Manual UI verification is the developer's responsibility before opening a pull request.
-
----
-
-## Known Risks and Gaps
-
-- **UI layer has no automated tests.** Regressions in Fyne widget behavior require manual detection. Acceptable in v1 given Fyne's limited test tooling. Revisit if Fyne's `test` package matures sufficiently.
-- **Export correctness is not automatically tested.** CSV output is verified manually. A regression here would surface quickly in real use.
-- **Performance is not automatically measured.** The 100ms / 200ms targets from the constitution are checked manually during development. No benchmark suite exists yet.
+Merge is blocked if any category fails.
 
 ---
 
-## Maintenance Guidance
+## CI/CD Pipeline (Future)
 
-- Engine tests are the most important tests in the project. Do not delete or weaken them to make a change easier.
-- If a test is flaky, fix it immediately — do not mark it as skipped.
-- When a PRD formula changes, update the relevant test table rows before updating the implementation.
-- This document is updated when the testing approach changes, not when individual tests are added.
+1. **Backend build:** Dockerfile test stage runs `go test -race ./...`
+2. **Frontend build:** npm test (when tests are added)
+3. **Service images:** Docker build produces leadpulse-backend and leadpulse-frontend images
+4. **Acceptance tests:** Run Playwright tests against running services
+5. **Report:** Generate and archive test results (HTML, JSON, screenshots)
+
+---
+
+## Local Development Workflow
+
+```bash
+# 1. Make code changes (backend, frontend, or both)
+
+# 2. Run targeted tests
+make test-backend          # Quick feedback on backend changes
+# make test-frontend        # (when available)
+
+# 3. Run full suite before commit
+make docker-down           # Clean up previous run
+make docker-build          # Rebuild images
+make docker-up             # Start services
+sleep 10                   # Wait for services to be healthy
+make test-acceptance       # Run Playwright tests
+make docker-down           # Clean up
+
+# 4. If all pass, commit and push
+git add ...
+git commit -m "..."
+git push
+```
+
+---
+
+## Debugging Tests
+
+### Backend
+
+```bash
+cd services/backend
+
+# Run single test
+go test -race -run TestAddMember_Success ./core/members
+
+# Verbose output
+go test -race -v ./...
+
+# CPU profile
+go test -race -cpuprofile=cpu.prof ./...
+go tool pprof cpu.prof
+```
+
+### Frontend
+
+```bash
+cd services/frontend
+
+# Watch mode (re-run on file change)
+npm test -- --watch
+
+# Debug in browser
+npm run test:debug
+```
+
+### Acceptance Tests
+
+```bash
+cd acceptance-tests
+
+# Run single test file
+npx playwright test tests/app.spec.ts
+
+# Run single test
+npx playwright test -g "app shell loads"
+
+# Debug mode (pause and inspect)
+npx playwright test --debug
+
+# UI mode (visual browser)
+npm run test:ui
+
+# Generate trace for debugging
+npx playwright test --trace on
+
+# View generated trace
+npx playwright show-trace test-results/trace.zip
+```
+
+---
+
+## Known Limitations
+
+- **Frontend tests:** Not yet implemented; planned for next increment after docker services are stable
+- **Acceptance tests:** Manual verification of docker-compose until Playwright can access running services
+- **Database state:** Each `docker-compose up` starts with the same initial state (no test data migration)
+- **Parallel execution:** Acceptance tests run sequentially (1 worker in CI) to avoid port conflicts
+
+---
+
+## References
+
+- `CONSTITUTION.md#Testing-Strategy` — High-level testing guardrails
+- `services/backend/` — Backend test structure and examples
+- `services/frontend/` — Frontend test structure (to be added)
+- `acceptance-tests/` — Playwright configuration and test examples
+- `docs/deployment.md` — How tests fit into CI/CD pipeline

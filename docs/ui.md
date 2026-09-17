@@ -1,6 +1,6 @@
 # UI Design System
 
-Shared decisions for the web application shell and future screens. Use these patterns and constraints as the foundation for all new features.
+Shared decisions for the web application shell and future screens. Use these patterns and constraints as the foundation for all new features. The frontend is a Vue 3 SPA (see `docs/adr/ADR-20260917-vue-spa-frontend.md`); the visual and interaction decisions below apply regardless of the templating technology used to implement them.
 
 ---
 
@@ -142,22 +142,16 @@ body (display: flex, flex-direction: column, height: 100vh)
 
 ## CSS Framework & Dependencies
 
-**Bulma CSS:** Base responsive framework (minified, embedded in binary).
+**Bulma CSS:** Base responsive framework, bundled with the Vue build and embedded in the binary via the compiled SPA's static assets.
 - Used for button, input, level, box, container, section, title classes
 - Media query breakpoints: desktop (≥1024px), tablet (769–1023px), mobile (≤768px)
-- No custom CSS build step required
+- Applied as class names directly in Vue single-file component templates
 
-**Alpine.js:** Lightweight reactive framework (minified, embedded in binary).
-- State management: `x-data`, `x-init`, reactive properties
-- Event handling: `@click`, `@keydown.escape`, `@focus`, `@blur`
-- Conditional rendering: `:class` dynamic bindings (e.g., `.is-active`)
-- No build step; runs directly in browser
+**Vue Router:** Client-side routing and shell/content composition. A persistent `AppShell.vue` layout component wraps routed screens, guaranteeing the shell is always present around feature content.
 
-**HTMX:** AJAX/dynamic content library (minified, embedded in binary).
-- Reserved for future feature screens (not used in shell yet)
-- Enables server-driven UI patterns without full page reloads
+**Pinia:** Client-side state management for cross-screen state (e.g., sidebar open/closed, active member selection, active cycle).
 
-**No external CDN calls:** All assets (CSS, JS) are embedded in the binary. Fonts via Font Awesome CDN only (deferred to v2 for offline-capable font embedding).
+**No external CDN calls:** All frontend assets (JS, CSS) are bundled by the Vite build and embedded in the binary. Fonts via Font Awesome CDN only (deferred to v2 for offline-capable font embedding).
 
 ---
 
@@ -165,14 +159,14 @@ body (display: flex, flex-direction: column, height: 100vh)
 
 **Sidebar toggle (mobile/tablet):**
 1. User clicks toggle button
-2. Sidebar state toggles via Alpine.js (`sidebarOpen = !sidebarOpen`)
-3. Sidebar class: `:class="{ 'is-active': sidebarOpen }"` slides in
-4. Overlay: `:class="{ 'is-active': sidebarOpen }"` dims background
+2. Sidebar open/closed state lives in a Pinia store (or local component state), toggled on click
+3. Sidebar class bound reactively (e.g., `:class="{ 'is-active': sidebarOpen }"`) slides in
+4. Overlay bound the same way dims background
 5. Clicking overlay or pressing Esc closes sidebar
 
 **Search input:**
 - Accepts focus and typing without errors
-- Alpine state tracks `searchFocused` boolean (for future styling, if needed)
+- Focus state tracked in local component state (for future styling, if needed)
 - No current API wired (ready for future implementation)
 
 **Keyboard shortcuts:**
@@ -225,11 +219,11 @@ body (display: flex, flex-direction: column, height: 100vh)
 ## Future Screens
 
 All new feature screens must:
-1. Use the 3-region layout (header + sidebar + main content)
+1. Use the 3-region layout (header + sidebar + main content) via the shared `AppShell.vue` layout and Vue Router nested routes
 2. Respect responsive breakpoints (desktop/tablet/mobile)
 3. Follow accessibility target (WCAG 2.1 AA)
-4. Use Bulma CSS classes and Alpine.js patterns established in the shell
-5. Test focus states, keyboard navigation, and screen reader compatibility
+4. Use Bulma CSS classes established in the shell
+5. Test focus states, keyboard navigation, and screen reader compatibility (component tests plus manual browser verification)
 
 ---
 

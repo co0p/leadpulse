@@ -2,7 +2,7 @@
 
 **Decision:** Use HTMX, Alpine.js, Go `html/template`, and Bulma CSS to build the browser-based frontend served from the Go binary. React, Vue, and plain-JS alternatives are not adopted.
 
-**Status:** Accepted
+**Status:** Superseded by `ADR-20260917-vue-spa-frontend.md`. Shell/content composition proved structurally awkward in practice (see the superseding ADR's Context section); the backend is being migrated to a pure JSON API with a dedicated Vue SPA frontend.
 
 ---
 

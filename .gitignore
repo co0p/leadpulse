@@ -1,5 +1,39 @@
 build/
-node_modules
+bin/
+*.db
+*.log
+
+# Dependencies
+node_modules/
+
+# Frontend builds
 frontend/dist
-leadpulse
+services/frontend/dist/
+services/frontend/node_modules/
+
+# Acceptance tests
+acceptance-tests/node_modules/
+acceptance-tests/test-results/
+acceptance-tests/.env.local
+
+# Environment files
+.env
+.env.local
+
+# Agent artifacts
 .agent
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local data should not be committed)
+data/
+

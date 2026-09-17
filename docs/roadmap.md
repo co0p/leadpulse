@@ -9,9 +9,13 @@ Product direction and sequencing for Team Impact Scorecard. Each entry explains 
 
 ## Migration Notice
 
-**As of 2026-09-15, implementation has shifted to a Web SPA frontend.** The Go backend (engine, store, service, and controllers) remains the same. The Fyne desktop GUI is being phased out in favor of an HTMX + Alpine.js + Go `html/template` SPA served from the Go binary. See the **SPA Implementation** section below for the new path. Fyne screens will be retired incrementally as their SPA equivalents pass acceptance criteria.
+**As of 2026-09-17, the frontend is being rebuilt as a dedicated Vue 3 SPA.** The Go backend (`engine/`, `core/`, `storage/`) is unaffected and becomes API-only: `server/` will expose JSON endpoints exclusively, with no HTML rendering. This supersedes the interim HTMX + Alpine.js + Go `html/template` approach (2026-09-15), which proved awkward for composing a persistent app shell with routed screen content (see `docs/adr/ADR-20260917-vue-spa-frontend.md` for the full rationale).
 
-See `docs/adr/ADR-20260915-spa-frontend-stack.md` for the frontend stack decision and rationale.
+**What this means for prior "Done" work:**
+- Backend/domain work (Team Member Management, Formula Engine, Alert Engine, Members API, Hexagonal Architecture) is unaffected — it is consumed identically by the new Vue frontend.
+- The HTML-rendering work ("Web App Shell", "SPA Increment 3: Members Screen") is superseded — it shipped and worked, but is being rebuilt in Vue and the Go HTML template code will be retired. See the **Frontend Migration Path** section below for the rebuild sequence.
+
+See `docs/adr/ADR-20260917-vue-spa-frontend.md` for the current frontend stack decision. See `docs/adr/ADR-20260915-spa-frontend-stack.md` (superseded) for the interim decision's history.
 
 ---
 
@@ -383,38 +387,15 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ---
 
-## In Progress
+### SPA Increment 3: Members Screen (HTMX/Go-template) — Superseded
 
-*(None currently. Next increment: TBD from roadmap.)*
+**Status:** Superseded by the Vue rebuild (see **Frontend Migration Path — Members Screen (Vue)** below). Kept here for evidence continuity; the HTML rendering code this entry describes will be deleted from `server/` as part of the Vue Members screen work.
 
----
+**Goal:** Build the Members screen (member list, add, edit, deactivate) as a browser-rendered SPA page backed by the existing Members API. This replaced manual member management via the Fyne Settings screen.
 
-## Planned
+**Why superseded:** shell/content composition via Go templates + HTMX proved structurally awkward (a bug shipped where the app shell failed to wrap screen content). See `docs/adr/ADR-20260917-vue-spa-frontend.md` for the full context and decision.
 
-### SPA Increment 3: Members Screen (SPA)
-
-**Goal:** Build the Members screen (member list, add, edit, deactivate) as a browser-rendered SPA page backed by the existing Members API. This replaces manual member management via the Fyne Settings screen.
-
-**Scope:**
-- Scaffold Members screen routes: GET /members, GET /members/add, POST /members, GET /members/{id}/edit
-- Implement responsive HTML templates with inline CSS for add, edit, and list pages
-- Add form validation (required fields, max length) with error re-rendering
-- Deactivate action uses AJAX (fetch) for seamless removal without page reload
-- All routes use human-friendly, bookmarkable URLs
-
-**Why Members first:** it is the simplest screen (pure CRUD, no formula rendering, no live preview). Low risk for proving the SPA pattern with routable URLs.
-
-**Acceptance criteria:**
-- AC-1: Members list page (`/members`) displays all active members in responsive table with Edit/Deactivate buttons
-- AC-2: Add member page (`/members/add`) provides form, submission persists and redirects to list
-- AC-3: Edit member page (`/members/{id}/edit`) loads member data, allows updates, persists and redirects
-- AC-4: Deactivate removes member from list without page reload (AJAX)
-- AC-5: Form validation blocks invalid inputs (required fields, name length ≤ 100 chars)
-- AC-6: All changes persist across page reloads and app restarts
-- AC-7: Responsive layout works on desktop (≥1024px), tablet (769–1023px), mobile (≤768px)
-- AC-8: Accessibility meets WCAG 2.1 AA (semantic HTML, ARIA labels, keyboard nav, focus outlines)
-
-**Acceptance scenarios verified:**
+**Acceptance scenarios verified (at the time, against the HTMX/Go-template implementation):**
 - ✓ Members list displays active members with Edit/Deactivate buttons
 - ✓ Add flow: navigate `/members/add` → fill form → submit → redirected to list, member appears
 - ✓ Edit flow: click Edit → pre-filled form → change seniority → save → redirected to list, updates persist
@@ -423,13 +404,10 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 - ✓ Responsive: correct layout on all three breakpoints (desktop, tablet, mobile)
 - ✓ Accessibility: semantic HTML, ARIA labels on buttons, focus outlines visible, keyboard nav works
 
-**Evidence:**
+**Evidence (historical):**
 - HTTP handlers: `server/handler_members.go` with `HandlerGetMembersPage`, `HandlerGetAddMemberPage`, `HandlerPostAddMember`, `HandlerGetEditMemberPage`
 - HTML templates: `server/templates/members/list.html`, `add.html`, `edit.html` with responsive CSS and AJAX deactivate
-- Route registration: `server/server.go` updated with GET `/members`, GET `/members/add`, POST `/members`, GET `/members/{id}/edit`
-- Form component: `server/templates/components/member_form.html` (reusable fields for add/edit)
-- All tests passing: `go test -race ./...` → 10 packages, 0 failures
-- Test file: `server/handler_members_test.go` with test cases for handler behavior
+- All tests passing at the time: `go test -race ./...` → 10 packages, 0 failures
 
 **Key commits:**
 - 0e868f9 — tidy: update sidebar link from Settings to Members
@@ -437,64 +415,181 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 - f04d49d — feat: add HandlerGetMembersPage to render members list as HTML
 - 74ab764 — feat: add Members screen HTML pages and handlers for add/edit/list
 
-**Test command:** `go test -race ./...` → all pass
-
 ---
 
-### SPA Increment 4: Monthly Entry API
+## In Progress
 
----
+### Docker Services Architecture & Acceptance Testing Foundation
 
-### SPA Increment 5: Monthly Input Screen
+**Goal:** Restructure the project into a multi-service architecture with separate frontend and backend services in Docker containers, and establish an acceptance test suite that runs against the full containerized system.
 
-**Goal:** Replace the Monthly Input Fyne screen (Screen B) with a SPA page.
+**Job Story:** When I develop features locally or validate them in CI, I want to run the entire system (frontend, backend, database) as containerized services via docker-compose, and verify end-to-end behavior with acceptance tests that exercise both the UI and API, so that I can catch integration bugs early and ship with confidence.
 
-**Scope:**
-- Implement all 10 signal fields, impact rating, live TII/completeness preview, save, and copy-from-previous-month using HTMX + Alpine.js
-- Live preview calls `POST /api/entries/preview` on field change (debounced via `x-on:input.debounce`)
-- Remove `ui/screens/monthly_input.go` and related Fyne acceptance/integration tests once SPA tests pass
-- All prior Fyne acceptance criteria must have equivalent browser tests
+**Branch:** `increment/docker-services-architecture`
 
 **Acceptance criteria:**
-- AC-1 through AC-5 from the original Monthly Input increment verified via browser tests
-- Live preview response latency ≤ 100ms on local machine (same PRD performance envelope)
-- No Fyne or OpenGL import remains in any monthly input test
+1. **Folder structure** — Created `services/frontend/` and `services/backend/` subdirectories; Go backend and npm frontend each have their own space
+2. **Backend Dockerfile** — Builds a Go binary and packages it as a container; exposes port 8080; includes health check
+3. **Frontend Dockerfile** — Builds Vue 3 SPA via Vite and serves it via a lightweight web server (or embeds in Go); exposes port 3000 (for dev) or as built artifacts
+4. **Docker-compose** — Orchestrates both services + PostgreSQL/SQLite database container; sets environment variables for service discovery; all services accessible via standard ports
+5. **Acceptance tests** — Playwright tests run against the live docker-compose environment; verify app shell loads, health check works, member CRUD flows end-to-end
+6. **CI integration** — Docker build/push steps documented; acceptance tests run in CI after docker-compose services are healthy
+
+**Status:** ✅ Done
+
+**Delivered Subtasks:**
+- tidy: Move Go backend to `services/backend/` (75 files reorganized, tests pass)
+- tidy: Create backend Dockerfile (multi-stage: test → build → runtime)
+- tidy: Scaffold Vue 3 + Vite frontend (AppShell component, health indicator, Bulma styling)
+- tidy: Create frontend Dockerfile (multi-stage: npm build → nginx)
+- feat: Create `docker-compose.yml` (backend + frontend orchestration, volume persistence, health checks)
+- tidy: Set up `acceptance-tests/` directory with Playwright scaffold
+- feat: Write first acceptance test suite (`acceptance-tests/tests/app.spec.ts` with 3 test cases)
+- tidy: Update Makefile with docker-build, docker-up, docker-down, docker-logs, test-backend, test-frontend, test-acceptance targets
+- tidy: Update .gitignore for docker volumes, node_modules, dist, test-results
+- tidy: Update docs/architecture.md with multi-service C4 diagram
+- feat: Create docs/testing.md (testing pyramid, strategy, commands)
+- feat: Create docs/deployment.md (docker-compose guide, CI/CD, health checks, scaling)
+
+**Evidence:**
+- `make docker-build` ✅ both images build successfully (backend:latest, frontend:latest)
+- `make docker-up` ✅ services start; backend marked healthy; frontend responding on port 3000
+- `make test-backend` ✅ all 10 Go packages pass with race detection
+- `GET /api/health` ✅ returns JSON `{"status":"ok"}`
+- `docker-compose.yml` ✅ validated; persistent data volume works across down/up cycles
+- Acceptance test scaffold ✅ ready at `acceptance-tests/tests/app.spec.ts` (3 test cases: app-shell-renders, health-indicator-green, no-console-errors)
+- All Makefile targets ✅ verified working (help, build, run-backend, run-frontend, test-backend, docker-build, docker-up, docker-down, docker-logs, clean, clean-docker)
+
+**Acceptance test location:** `acceptance-tests/tests/app.spec.ts` — ready to run once services are healthy.
 
 ---
 
-### SPA Increment 6: Remaining Screens (Overview, Member Detail, Alerts, Review)
+## Planned
+
+### Frontend Bootstrap: Bulma Shell + Health Indicator
+
+**Goal:** Bootstrap a Vue 3 + Vite SPA with a persistent Bulma shell, serve it from the frontend service, and display a green/red health indicator in the footer that checks backend connectivity on page load.
+
+**Job Story:** When I load the web app in my browser, I want to see a working frontend with a Bulma shell layout and a small health icon in the footer that confirms the backend service is accessible, so that I have confidence the app is running and the backend is reachable.
+
+**Branch:** `increment/spa-bootstrap-health`
+
+**Scope:** This increment assumes the Docker services infrastructure (from **Docker Services Architecture & Acceptance Testing Foundation** above) is already in place. It adds the Vue SPA to `services/frontend/src/` with Bulma shell and health indicator component. The backend's `/api/health` endpoint is extended to return build version info (or kept simple).
+
+**Acceptance criteria:**
+1. Shell Layout — Vue app loads in browser with Bulma CSS applied; layout includes sidebar, top bar, main content area, and footer
+2. Shell Persistence — Sidebar and top bar remain visible as the user navigates between client-side routes (no full-page reload)
+3. Health Endpoint — Backend exposes `GET /api/health` returning `{status: "ok"}` with HTTP 200
+4. Health Indicator — Footer displays a green checkmark icon (✓) on successful backend connection, red X (✗) if connection fails; check occurs once when the page loads
+5. Docker Integration — Frontend service's npm build output is served by the frontend container; health checks work across container network
+
+**Next:** Execute plan.md for Docker services, then this increment.
+
+---
+
+### Feature Backlog (Unaffected by Migration)
+
+The following increments build a dedicated Vue 3 SPA against the existing (and, where noted, extended) JSON API. The backend (`engine/`, `core/`, `storage/`) is unaffected. `server/` is trimmed to API-only handlers as each screen's Go-template equivalent (if any) is retired. See `docs/adr/ADR-20260917-vue-spa-frontend.md` for the stack decision and rationale, and `docs/testing.md` for the testing boundary between Vitest/Vue Test Utils and Playwright.
+
+**Sequencing principle:** each increment ships one screen, backed by its API (existing or newly built), with component tests for all behavior and exactly one Playwright test for the screen's main success flow.
+
+---
+
+#### Frontend Increment 1: Vue Project Scaffold and API-only Backend Cleanup
+
+**Goal:** Stand up the Vue 3 + Vite project, wire the build into the Go embed pipeline, and strip `server/` of HTML rendering so it is API-only.
+
+**Scope:**
+- Scaffold a Vue 3 + Vite project (own `package.json`, Vitest, Vue Test Utils, Playwright configured but empty)
+- Add Pinia; add Vue Router with a persistent `AppShell.vue` layout component reproducing the shell decisions in `docs/ui.md` (sidebar, top bar, responsive breakpoints)
+- Wire `npm run build` output into the Go binary's `embed.FS`; update `main.go`/`server/server.go` to serve the built SPA for non-API routes
+- Delete `server/templates/*` and the HTML-rendering handlers (`HandlerGetMembersPage`, `HandlerGetAddMemberPage`, `HandlerPostAddMember`, `HandlerGetEditMemberPage`) — their JSON-API equivalents already exist and are retained
+- Update `docs/deployment.md`-documented build order in CI (`npm run build` → `go build`)
+
+**Why first:** every subsequent screen increment depends on the shell, router, and build pipeline existing. This also resolves the shell-composition bug that triggered the Vue migration.
+
+**Acceptance criteria:**
+- AC-1: `npm run build` followed by `go build` produces a working binary; loading `http://localhost:8080/` in a browser shows the Vue shell
+- AC-2: Navigating to any client-side route keeps the shell (sidebar, top bar) visible — no full-page reload, no missing-shell regressions
+- AC-3: `server/templates/*` is deleted; no `html/template` import remains in `server/`
+- AC-4: `go test -race ./...` passes with only API-contract handler tests remaining in `server/`
+- AC-5: `npm test` (Vitest) passes for the shell component
+
+---
+
+#### Frontend Increment 2: Members Screen (Vue)
+
+**Goal:** Rebuild the Members screen (list with Active/Deactivated/All tabs, add, edit, deactivate, reactivate) as Vue components against the existing Members API.
+
+**Scope:**
+- `MemberList.vue` — table with status tabs, calling `GET /api/members?status=...`
+- `MemberForm.vue` — shared add/edit form component
+- Pinia store for member state (list, filters, loading/error states)
+- Wire deactivate (`DELETE /api/members/{id}`) and reactivate (`PATCH /api/members/{id}/reactivate`) actions
+- Delete the superseded Go-template Members screen artifacts (see **SPA Increment 3 — Superseded** above) once the Vue screen passes acceptance criteria
+
+**Why second:** the API already exists in full (status filtering, reactivation) from prior increments; this is the lowest-risk screen to prove the Vue pattern end-to-end.
+
+**Acceptance criteria:**
+- AC-1: Members list displays Active/Deactivated/All tabs backed by the existing status-filtered API; the shell remains visible at all times
+- AC-2: Add member form validates required fields and persists a new member
+- AC-3: Edit member form loads existing data, persists changes
+- AC-4: Deactivate and reactivate actions work without a full page reload and reflect immediately in the list
+- AC-5: Vitest component tests cover list rendering, tab switching, form validation, and error states
+- AC-6: One Playwright test covers the main success flow: add a member, see it appear in the Active tab
+
+---
+
+#### Frontend Increment 3: Monthly Entry API
+
+**Goal:** Build the backend API for monthly signal entry (currently only the service/coordinator layer exists) so the Monthly Input screen has a contract to build against.
+
+**Scope:**
+- `POST /api/entries`, `GET /api/entries/{id}`, `PATCH /api/entries/{id}`, `GET /api/entries?member={id}` following the same core/use-case/repository pattern as members
+- `POST /api/entries/preview` — computes TII/completeness/alerts for in-progress (unsaved) input, without persisting
+- Handler tests only (JSON contract) — no UI work in this increment
+
+**Acceptance criteria:**
+- AC-1: All CRUD endpoints round-trip correctly (core use-case tests + handler tests)
+- AC-2: Preview endpoint returns computed scores without persisting any data
+- AC-3: Invalid signal values (out of range) return structured 400 errors
+- AC-4: `go test -race ./...` passes
+
+---
+
+#### Frontend Increment 4: Monthly Input Screen (Vue)
+
+**Goal:** Build the Monthly Input Workspace (Screen B) in Vue against the API from Increment 3.
+
+**Scope:**
+- Member list, raw signal form, IG/IP/IT/IO rating matrix, live score/alert preview panel, validation and completeness warnings
+- Live preview calls `POST /api/entries/preview` on field change (debounced client-side)
+- Save Draft / Submit Member Month / Copy Previous Month actions
+
+**Acceptance criteria:**
+- AC-1: All 10 signal fields and impact ratings can be entered and saved
+- AC-2: Live preview updates within the PRD's 100ms performance envelope
+- AC-3: Validation and completeness warnings display inline, matching PRD 4.3
+- AC-4: Vitest component tests cover the form, validation, and preview panel; one Playwright test covers "enter and submit a complete monthly entry"
+
+---
+
+#### Frontend Increment 5: Remaining Screens (Overview, Member Detail, Alerts, Review, Settings)
 
 Each screen follows the same pattern:
-1. Add any missing API endpoints for the screen's data
-2. Build the SPA screen using HTMX + Alpine.js + Go templates
-3. Retire the equivalent Fyne placeholder or screen
-4. Verify acceptance criteria via browser tests
+1. Build or extend the JSON API endpoints the screen needs (own increment if the API doesn't exist yet)
+2. Build the Vue screen (components + Pinia store + route)
+3. Cover behavior and edge cases with Vitest/Vue Test Utils; add one Playwright test for the screen's main success flow
+4. Mark the screen Done in this roadmap with evidence
 
-These screens map 1:1 to the feature set (Overview Dashboard, Member Detail, Alerts Center, Monthly Review). They are sequenced identically to the original roadmap — the SPA migration does not change feature priority, only the rendering layer.
+**Screens to build (in PRD order):**
+- Overview Dashboard (Screen A) — KPI strip, team TII trend chart, DG/DP/DT/DO heatmap, alert table, action queue
+- Member Detail (Screen C) — current TII/dimensions/confidence/alerts, 6–12 month trend timeline, signal contribution table, evidence log, action plan tracker
+- Alerts & Risk Center (Screen D) — filterable alert list, root cause summary, suggested interventions, assign/resolve/snooze
+- Monthly Review & Calibration (Screen E) — distribution charts, member decision-support cards, override reason capture, finalize/lock cycle
+- Limited Settings (Screen F) — billability target/tolerance, alert sensitivity preset, reminder dates
 
-**Screens to build (in order):**
-- Overview Dashboard (Screen A) — team KPI strip, dimension heatmap, alert table, action queue
-- Member Detail (Screen C) — 12-month trend, signal contribution, evidence log, action plan
-- Alerts Center (Screen D) — filter, triage, assign, resolve with reason capture
-- Monthly Review and Calibration (Screen E) — finalization, promotion/support guardrail review, override capture, cycle lock
-
----
-
-### SPA Increment 7: Remove Fyne Dependency
-
-**Goal:** Once all screens are migrated, remove Fyne entirely from `go.mod`.
-
-**Scope:**
-- Delete `ui/screens/`, `ui/app.go`, and any remaining Fyne imports
-- Remove `fyne.io/fyne/v2` and all OpenGL/GLFW/text-render transitive dependencies from `go.mod`
-- Update `main.go` to only start the HTTP server (no Fyne window)
-- Update `docs/architecture.md` and `docs/adr/` with a new ADR documenting the Fyne retirement decision
-- Binary size and startup time should decrease materially
-
-**Acceptance criteria:**
-- AC-1: `go mod tidy` leaves no Fyne dependency in `go.mod` or `go.sum`
-- AC-2: `go test -race ./...` passes with no OpenGL/headless test infrastructure
-- AC-3: `go build ./...` produces a working binary; `curl http://localhost:8080/` serves the SPA homepage
+Each screen is its own increment with its own acceptance criteria, defined when that increment starts (per `docs/prd.md` §10 for component scope and CTAs).
 
 ---
 

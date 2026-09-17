@@ -1,101 +1,154 @@
 # Architecture
 
-Team Impact Scorecard — structural overview (SPA-first, API-driven, hexagonal architecture).
+Team Impact Scorecard — multi-service containerized architecture (Vue 3 SPA frontend container, API-only backend container, orchestrated via Docker Compose).
 
 ---
 
 ## C4 Level 2 — Container View
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  User's Machine / Browser                                   │
-│                                                             │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  Team Impact Scorecard (Single Binary + Browser SPA) │  │
-│  │                                                      │  │
-│  │  ┌──────────────────┐   HTTP calls  ┌────────────┐  │  │
-│  │  │                  │ ────────────► │            │  │  │
-│  │  │   Browser SPA    │               │  server/   │  │  │
-│  │  │                  │               │            │  │  │
-│  │  │  HTMX +          │               │  HTTP      │  │  │
-│  │  │  Alpine.js +     │               │  adapters  │  │  │
-│  │  │  Go templates    │   (JSON API)  │            │  │  │
-│  │  │                  │               │            │  │  │
-│  │  │  Embedded in     │               └──────┬─────┘  │  │
-│  │  │  Go binary       │                      │ injects │  │
-│  │  │  (embed.FS)      │                      ▼         │  │
-│  │  │                  │   calls       ┌─────────────┐  │  │
-│  │  │                  │ ────────────► │             │  │  │
-│  │  │                  │               │  core/      │  │  │
-│  │  │                  │               │  members/   │  │  │
-│  │  └──────────────────┘               │             │  │  │
-│  │                                     │  Use Cases: │  │  │
-│  │   (SPA replaceable with            │  - Add      │  │  │
-│  │    CLI, future UIs)                │  - Get      │  │  │
-│  │                                     │  - Edit     │  │  │
-│  │                                     │  - Deact    │  │  │
-│  │                                     └──────┬─────┘  │  │
-│  │                                            │ depends │  │
-│  │                                            │ on port │  │
-│  │                                            ▼         │  │
-│  │                                    ┌──────────────┐  │  │
-│  │                                    │              │  │  │
-│  │                                    │  core/       │  │  │
-│  │                                    │  members/    │  │  │
-│  │                                    │              │  │  │
-│  │                                    │  PORT:       │  │  │
-│  │                                    │  Repository  │  │  │
-│  │                                    │  (interface) │  │  │
-│  │                                    │              │  │  │
-│  │                                    └──────┬───────┘  │  │
-│  │                                           │ impl     │  │
-│  │                    ┌──────────────────────┴──────────┐ │  │
-│  │                    ▼ (in-memory for tests)          ▼ │  │
-│  │            ┌──────────────────┐         ┌─────────────┐ │  │
-│  │            │ storage/memory/  │         │ storage/    │ │  │
-│  │            │ InMemory         │         │ sqlite/     │ │  │
-│  │            │ Repository       │         │ SQLite      │ │  │
-│  │            │ (test fixture)   │         │ Repository  │ │  │
-│  │            └──────────────────┘         │ (production)│ │  │
-│  │                                         │             │ │  │
-│  │                                         └──────┬──────┘ │  │
-│  │                                                │        │  │
-│  │                                    ┌──────────▼──────┐ │  │
-│  │                                    │                 │ │  │
-│  │                                    │  engine/        │ │  │
-│  │                                    │                 │ │  │
-│  │                                    │  Pure funcs.    │ │  │
-│  │                                    │  Scoring,       │ │  │
-│  │                                    │  norms, etc.    │ │  │
-│  │                                    │                 │ │  │
-│  │                                    └─────────────────┘ │  │
-│  │                                                      │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                         │                                   │
-│                         │ reads/writes                      │
-│                         ▼                                   │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │  SQLite File                                         │  │
-│  │  $UserConfigDir/leadpulse/data.db                    │  │
-│  │  — members, monthly entries, evidence, actions,      │  │
-│  │    audit log, cycle state                            │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Developer's Machine / Local Docker Environment                          │
+│                                                                          │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  Docker Network (leadpulse-network)                              │   │
+│  │                                                                  │   │
+│  │  ┌─────────────────────────┐         ┌──────────────────────┐   │   │
+│  │  │  Frontend Container     │         │  Backend Container   │   │   │
+│  │  │  (services/frontend/)   │         │  (services/backend/) │   │   │
+│  │  │                         │         │                      │   │   │
+│  │  │  ┌─────────────────┐    │         │  ┌────────────────┐  │   │   │
+│  │  │  │ Nginx Server    │    │         │  │ Go Binary      │  │   │   │
+│  │  │  │ Port 3000       │    │         │  │ Port 8080      │  │   │   │
+│  │  │  └────────┬────────┘    │         │  └────────┬───────┘  │   │   │
+│  │  │           │             │         │           │          │   │   │
+│  │  │  ┌────────▼────────┐    │         │  ┌────────▼────────┐ │   │   │
+│  │  │  │ Vue 3 + Vite    │    │         │  │ HTTP API        │ │   │   │
+│  │  │  │ SPA (static)    │    │         │  │ Handler Layer   │ │   │   │
+│  │  │  │                 │    │         │  │ (server/)       │ │   │   │
+│  │  │  │ • AppShell      │    │         │  │                 │ │   │   │
+│  │  │  │ • Health Indicator◄──┼─────────┼──┤ /api/health     │ │   │   │
+│  │  │  │ • Bulma Styling │    │ HTTP/  │  │ /api/members    │ │   │   │
+│  │  │  │                 │    │ JSON   │  │ /api/...        │ │   │   │
+│  │  │  └─────────────────┘    │ over   │  └────────┬────────┘ │   │   │
+│  │  │                         │ docker-│           │          │   │   │
+│  │  │ Proxy: /api/* ──────────┼─ compose         │ depends  │   │   │
+│  │  │         to backend      │ network└───────────┤ on port  │   │   │
+│  │  └─────────────────────────┘         │          │          │   │   │
+│  │                                     │  ┌────────▼────────┐ │   │   │
+│  │  Docker Compose                     │  │ core/ members/  │ │   │   │
+│  │  • Volumes: data/ (SQLite)          │  │                 │ │   │   │
+│  │  • Networks: leadpulse-network      │  │ Use Cases       │ │   │   │
+│  │  • Health Checks: both services     │  │ Add, Get, Edit  │ │   │   │
+│  │                                     │  │ Deactivate, etc │ │   │   │
+│  │                                     │  └────────┬────────┘ │   │   │
+│  │                                     │           │          │   │   │
+│  │                                     │  ┌────────▼────────┐ │   │   │
+│  │                                     │  │ core/members/   │ │   │   │
+│  │                                     │  │ PORT (repo      │ │   │   │
+│  │                                     │  │ interface)      │ │   │   │
+│  │                                     │  └────────┬────────┘ │   │   │
+│  │                                     │           │ impl     │   │   │
+│  │                                     │  ┌────────▼──────┐   │   │   │
+│  │                                     │  │ storage/sqlite│   │   │   │
+│  │                                     │  │ Repository    │   │   │   │
+│  │                                     │  └────────┬──────┘   │   │   │
+│  │                                     │           │          │   │   │
+│  │  ┌─────────────────────────────────┼───────────▼──────┐   │   │   │
+│  │  │  Volume Mount: /data (in container)                │   │   │   │
+│  │  │                                                     │   │   │   │
+│  │  │  ┌───────────────────────────────────────────────┐ │   │   │   │
+│  │  │  │ SQLite Database File                           │ │   │   │   │
+│  │  │  │ /data/data.db (persistent, host: ./data/)     │ │   │   │   │
+│  │  │  │ — members, monthly entries, audit log, state  │ │   │   │   │
+│  │  │  └───────────────────────────────────────────────┘ │   │   │   │
+│  │  └─────────────────────────────────────────────────────┘   │   │   │
+│  │                                                            │   │   │
+│  └────────────────────────────────────────────────────────────┘   │   │
+│                                                                    │   │
+│ Browser: http://localhost:3000                                    │   │
+│                                                                    │   │
+└────────────────────────────────────────────────────────────────────────┘
 
-No external network connections. No cloud. No server. All data on-device.
+docker-compose up --build:
+  1. Builds leadpulse-backend container (multi-stage: test, build, runtime)
+  2. Builds leadpulse-frontend container (multi-stage: build, nginx)
+  3. Starts both services on shared docker-compose network
+  4. Mounts ./data/ volume for SQLite persistence
+  5. Frontend at http://localhost:3000
+  6. Backend API at http://localhost:8080 (reachable from frontend as http://backend:8080)
 ```
 
 ---
 
 ## Containers
 
-### `server/` — HTTP Adapter Layer
-- **Technology:** Go `net/http`, Go `html/template` (server-side rendering), embedded static assets (CSS, JS, HTML templates)
-- **Responsibility:** Boot an HTTP server on localhost:8080; serve templated HTML shell and SPA screens via server-side rendering; expose JSON REST API endpoints for dynamic data; handle request/response mapping. All frontend assets (Bulma CSS, HTMX, Alpine.js) are embedded in the binary at build time (zero CDN dependencies).
-- **Shell:** The root route `/` serves `server/templates/layout.html` (full-height flexbox layout with sidebar, top bar, and main content area). Shell components are rendered once at server boot; future feature screens layer into the main content area via HTMX or client-side Alpine.js state.
-- **Handlers:** Receive HTTP requests, parse JSON/form data, call use cases via dependency injection, map results to HTTP responses or templated HTML. No business logic; all logic in core use cases.
-- **Constraints:** No direct store or engine access; no database connections. All persistence through injected use case dependencies. No external network calls (all assets embedded or served locally).
+## Services
+
+### Frontend Service (`services/frontend/`)
+
+**Container:** `leadpulse-frontend:latest`
+- **Technology:** Node.js 20 + Vue 3 + Vite + Nginx
+- **Port:** 3000 (exposed to localhost)
+- **Build:** Multi-stage Dockerfile
+  - Stage 1 (build): `npm install`, `npm run build` → `dist/`
+  - Stage 2 (runtime): Nginx serves static `dist/` files; proxies `/api/*` to backend
+- **Startup:** Nginx server on 0.0.0.0:3000
+- **Environment:** `VITE_API_URL=http://backend:8080` (injected at runtime, used by AppShell for health checks)
+- **Health Check:** HTTP 200 on `http://localhost:3000/`
+- **Network:** Joined to `leadpulse-network` docker-compose network; can reach backend as `http://backend:8080`
+
+**Responsibility:**
+- Serve Vue 3 SPA (AppShell component with sidebar, topbar, footer, health indicator)
+- Route static assets
+- Proxy `/api/*` requests to backend service
+- Display health status of backend (green/red indicator in footer)
+
+### Backend Service (`services/backend/`)
+
+**Container:** `leadpulse-backend:latest`
+- **Technology:** Go 1.23 + hexagonal architecture
+- **Port:** 8080 (exposed to localhost and docker network)
+- **Build:** Multi-stage Dockerfile
+  - Stage 1 (test): `go test -race ./...` (must pass before build proceeds)
+  - Stage 2 (build): `go build` → binary
+  - Stage 3 (runtime): Alpine-based; binary + health check script
+- **Startup:** Go binary on 0.0.0.0:8080
+- **Environment:** `DATABASE_URL="sqlite:///data/data.db"` (or fallback to ~/.config/leadpulse/data.db if /data not available)
+- **Volume Mount:** `/data` → persistent SQLite database
+- **Health Check:** HTTP 200 on `http://localhost:8080/api/health`
+- **Network:** Joined to `leadpulse-network`; reachable from frontend as `backend:8080`
+
+**Responsibility:**
+- Expose JSON REST API endpoints (`/api/health`, `/api/members`, etc.)
+- Apply business logic via use cases (hexagonal core)
+- Persist data to SQLite `/data/data.db`
+- No HTML rendering; no server-side templates; API-only
+
+### Database Volume
+
+**Mount:** `data:` volume mapped to `/data/` inside backend container
+- **Persistence:** Survives `docker-compose down` cycles
+- **Host Path:** `./data/` (relative to project root)
+- **Contents:** `data.db` (SQLite file)
+- **Lifecycle:** First `docker-compose up` creates empty volume; subsequent runs preserve data
+- **Cleanup:** `docker-compose down -v` deletes volume
+
+---
+
+## Hexagonal Architecture (Inside Backend)
+
+**Same as before; unchanged by containerization:**
+- **Handlers:** Receive HTTP requests, parse JSON/path/query data, call use cases via dependency injection, map results to JSON HTTP responses. No business logic; all logic in core use cases. No template rendering, no layout state, no knowledge of how the response is displayed.
+- **Constraints:** No direct store or engine access; no database connections. All persistence through injected use case dependencies. No external network calls (all API responses are JSON; static SPA assets are embedded, not fetched from a CDN).
+
+### Vue SPA — Frontend Container
+- **Technology:** Vue 3, Vite (build tool), Vue Router (client-side routing), Pinia (state management), Bulma (CSS).
+- **Repository location:** a separate frontend project (own `package.json`, own test suite), built independently of the Go module.
+- **Responsibility:** All rendering, navigation, and client-side state. Owns the persistent application shell (sidebar, top bar) as a layout component wrapping routed screens — shell/content composition is a Vue Router concern, not a backend concern. Calls the backend exclusively through `/api/*` JSON endpoints.
+- **Build integration:** `npm run build` produces a static `dist/` directory. That directory is embedded into the Go binary via `embed.FS` before `go build`. The Go binary serves these static files directly; no Node.js process runs alongside the shipped binary.
+- **Constraints:** No direct database or filesystem access. No knowledge of Go types or internal package structure. Communicates with the backend only through the documented JSON API contract — the same contract any other client (CLI, future integrations) would use.
+- **Decision record:** see `docs/adr/ADR-20260917-vue-spa-frontend.md` for the full rationale and alternatives considered.
 
 ### HTTP Handlers — Request/Response Adapter Pattern
 
@@ -246,7 +299,7 @@ http.ListenAndServe(":8080", mux)
 
 | From | To | Protocol | Notes |
 |------|----|----------|-------|
-| Browser SPA | server/ | HTTP (localhost:8080) | JSON API |
+| Vue SPA | server/ | HTTP (localhost:8080) | JSON API |
 | server/ (handlers) | core/members/ (use cases) | Function calls (interfaces) | Dependency injection |
 | core/members/ (use cases) | MemberRepository port | Function calls (interface) | Adapter injected at composition root |
 | MemberRepository port | storage/{memory,sqlite}/ | Adapter implementations | SQLiteRepository for production; InMemoryRepository for tests |
@@ -284,138 +337,46 @@ http.ListenAndServe(":8080", mux)
 
 ---
 
-## Update Policy
-
-Update this file when:
-- A container is added, removed, or its technology changes
-- A communication path between containers changes
-- A new external system dependency is added
-- A critical constraint changes
-
-Do NOT update for internal refactors, new features within an existing container, or test changes.
-
-**Last updated:** 2026-09-16 — Hexagonal architecture (ports & adapters) implemented for member CRUD; coordinator pattern replaced by use cases with explicit port dependencies.
-
----
-
 ## Architecture Decision
 
-See [ADR-20260916 — Hexagonal Architecture (Ports & Adapters) for Member CRUD](./adr/ADR-20260916-hexagonal-architecture-member-crud.md) for the decision rationale, alternatives considered, and consequences.
-- **Key constraint:** Stateless per HTTP request (or CLI invocation). No member variables that persist across calls except service references.
+See [ADR-20260916 — Hexagonal Architecture (Ports & Adapters) for Member CRUD](./adr/ADR-20260916-hexagonal-architecture-member-crud.md) for the core/use-case/repository decision, and [ADR-20260917 — Vue SPA Frontend, API-only Backend](./adr/ADR-20260917-vue-spa-frontend.md) for the frontend/backend boundary decision.
 
-### `service/` — Application Use Case Layer
-- **Technology:** Go (pure functions, no I/O)
-- **Responsibility:** Application use cases, organized by domain (e.g., `service/member/`, `service/monthly/`). Each use case is a transaction: fetch aggregates via repository, call domain services for cross-aggregate rules, call `engine/` for computation, persist via repository, return the result or error.
-- **Dependency model:** All persistence is abstracted via repository interfaces defined in `engine/domain/`. Service layer receives these interfaces as dependencies (not `*sql.DB`). This enables testing with in-memory repositories (no database required).
-- **Domain services:** Application services depend on domain services (`ScoringService`, `TrendService`, `ValidationService`, `MonthlyEntryService`) which enforce cross-aggregate rules before persistence. Domain services also accept repository interfaces only; no database coupling.
-- **Service aggregation:** Application services are injected into coordinators via constructor.
-- **Constraints:** No UI logic. No direct SQLite access. No direct database dependencies. Delegates persistence to repository interfaces, computation to `engine/`, cross-aggregate rule enforcement to domain services.
-- **Implemented use cases:** `service/member/` (AddMember, ListMembers, EditMember, DeactivateMember), `service/monthly/` (CreateEntry, GetEntry, ListEntriesByMember, UpdateEntry, ComputeScores, GetTrends).
-
-### `store/` — Persistence Layer
-- **Technology:** Go, `modernc.org/sqlite` (pure Go, no CGO)
-- **Responsibility:** Implements repository interfaces defined in `engine/domain/`. All SQLite reads and writes. Schema definition and migrations. Reconstructs aggregates from database rows; persists aggregates to database tables.
-- **Pattern:** Repository implementations (SQLiteTeamMemberRepository, SQLiteMonthlyEntryRepository) conform to repository interfaces defined in the domain layer. This keeps storage knowledge in the store layer while the domain layer remains storage-agnostic.
-- **Data retained:** 24 months of monthly entries per member, evidence notes, action plans, audit trail, cycle finalization state.
-- **Constraints:** No formula computation. No persistence of raw domain objects; only aggregates via repository interface. Repositories validate aggregate state before persisting.
-
-### `engine/` — Formula Engine
-- **Technology:** Go (pure functions, no external dependencies)
-- **Responsibility:** All computation defined in the PRD. Normalization functions, dimension scores (DG/DP/DT/DO), Total Impact Index (TII), trend calculations (MA3/Delta1/Delta3/Vol3), alert evaluation, confidence score, decision guardrail checks.
-- **Constraints:** No I/O of any kind. No imports from `store/`, `service/`, `server/`, or `ui/`. Input and output are plain Go structs.
-
-### `SQLite File` — Local Data Store
-- **Location:** `$UserConfigDir/leadpulse/data.db`
-- **Technology:** SQLite 3
-- **Responsibility:** Durable storage of all application data on the user's device.
-- **Constraints:** Never accessed directly by HTTP handlers or coordinators. All access is through `store/`.
-
----
-
-## Dependency Direction
-
-```
-HTTP Handler  →  Coordinator  →  Service  →  engine/domain (types only)
-                                     ↓
-                                repository interfaces
-                                     ↓
-                                  store  
-                                     ↓
-                           engine/domain (types only)
-```
-
-- `engine/domain` has no project-internal dependencies. Contains value objects, aggregates, domain services, and repository interfaces.
-- `store` implements repository interfaces defined in `engine/domain`. May use engine types but must not call engine computation functions.
-- `service` depends on repository interfaces (not concrete store implementations). Each use case is a transaction: read from repository, call domain services for cross-aggregate rules, call `engine/` if needed, write to repository, return result.
-- `coordinator` depends on service instances. Orchestrates multi-step workflows; accepts application-level inputs; returns domain error types. No HTTP or UI framework knowledge.
-- `server` (HTTP handlers) depends on coordinator instances. Maps HTTP request/response to coordinator calls. No business logic in handlers.
-- No circular imports. No layer may import from a layer above it.
-
----
-
-## Key Communication Paths
-
-| From | To | What |
-|---|---|---|
-| Browser (SPA) | HTTP handler | HTTP request (GET /api/members, POST /api/entries, etc.) |
-| HTTP handler | Coordinator | Use case call (e.g., `coordinator.AddMember(firstName, lastName, seniority)`) with application-level inputs |
-| Coordinator | Service | Orchestrated use case call (e.g., `service.CreateEntry(...)`) |
-| Service | Store | Read/write domain entities via repository interface |
-| Service | Engine | Compute scores, alerts, trends, guardrails |
-| Store (read) | SQLite file | SQL queries returning domain types |
-| Store (write) | SQLite file | SQL inserts/updates, append-only audit log |
-| Browser (SPA) | Static assets | HTML, CSS, JS served from embed.FS |
-
----
-
-## Data Schema (Summary)
-
-Tables:
-- `members` — id, name, team_id, created_at
-- `monthly_entries` — member_id, month (YYYY-MM), raw inputs (10 fields), impact ratings (40 fields), computed scores (DG/DP/DT/DO/TII/MA3/Delta1/Delta3/Confidence), status, finalized_at
-- `evidence_notes` — id, member_id, month, author, category, body, created_at
-- `action_plans` — id, member_id, month, description, owner, due_date, status, resolved_at
-- `audit_log` — id, member_id, month, field, old_value, new_value, changed_by, changed_at
-- `cycle_state` — team_id, month, phase, finalized_at, locked
-
-Schema migrations are additive-only in v1 (see `docs/deployment.md`).
-
----
+- **Key constraint:** Stateless per HTTP request. No member variables that persist across calls except injected use case/repository references.
 
 ## Testing Strategy by Layer
-
-The coordinator layer is the testability boundary for business logic. Tests isolate each layer and verify integration points.
 
 **`engine/` — unit tests (pure functions)**
 - No mocks needed. Direct function calls with inputs and assertions on outputs.
 - 100% of formulas, alert thresholds, trend calculations, guardrail logic.
 - Example: `TestNormalizeMorale_midRange`, `TestAlertBurnout_redThreshold`.
-- Gate: all engine tests must pass before any service or coordinator code runs.
+- Gate: all engine tests must pass before any core use case code runs.
 
-**`service/` — unit tests (mock store, real engine)**
-- Mock the `store` interface. Real `engine` functions (no mocks).
-- Each use case is a test: call the use case with inputs, verify it calls `store` methods in the right order with the right data, verify the result.
-- Example: `TestAddMember_createsAndReturns`, `TestSubmitMonthlyEntry_computesAndPersists`.
-- Gate: all service tests must pass before coordinator code is written. Services are the API contract.
+**`core/` — unit tests (in-memory repository, real engine)**
+- Inject an in-memory repository implementation (`storage/memory/`). Real `engine` functions (no mocks).
+- Each use case is a test: call `Execute()` with inputs, verify repository state and return values.
+- Example: `TestAddMemberUseCase_createsAndReturns`, `TestReactivateMemberUseCase_reactivatesInactiveMember`.
+- Gate: all core tests must pass before HTTP handlers are written. Use cases are the API contract.
 
-**`service/coordinator/` — unit tests (in-memory repos, real services)**
-- Use in-memory repositories (same pattern as service tests).
-- Test coordinator workflows: Load, SelectMember, SaveEntry, AddMember, etc.
-- Each coordinator is a test: instantiate with services, call methods, verify service calls are correct.
-- Example: `TestMonthlyInputCoordinator_SaveMember_Persists`, `TestSettingsCoordinator_AddMember`.
-- Gate: all coordinator tests must pass before HTTP handlers are written. Coordinators are the UI-agnostic contract.
+**`storage/` — integration tests (real SQLite, in-memory DSN)**
+- Use `":memory:"` SQLite DSN. Verify each repository method persists and reconstructs aggregates correctly.
+- Example: `TestSQLiteTeamMemberRepository_Save_Inserts_NewMember`.
+- Gate: all storage tests must pass. Storage adapters are swappable only if they pass the same behavioral contract as the in-memory adapter.
 
-**`server/` — unit and integration tests (in-memory repos + httptest)**
+**`server/` — unit tests (mocked use cases + httptest)**
 - Handler tests use `httptest.NewRecorder` to test request/response mapping without a live server.
-- Handlers are wired to mocked or in-memory coordinators to verify correct delegation.
-- Example: `TestHandlerAddMember_createsAndReturnsJSON`, `TestHandlerSaveEntry_validatesAndPersists`.
-- Gate: all handler tests must pass. Handlers are the API surface.
+- Handlers are wired to mocked use cases (hand-written test doubles) to verify correct delegation and JSON mapping.
+- Example: `TestHandlerAddMember_createsAndReturnsJSON`, `TestHandlerGetMembers_filtersbyStatus`.
+- Gate: all handler tests must pass. Handlers are the JSON API surface; tests assert on JSON structure only, never on HTML.
 
-**Browser (SPA) — end-to-end tests (live server, real database)**
-- Playwright or Cypress tests exercise full workflows: login, load member list, submit entry, view results.
-- Tests use a real SQLite database (in-memory or temporary file) and a live HTTP server instance.
-- Example: `spec/monthly-input.spec.ts` (submit entry, verify TII updates, save, reload, verify persistence).
-- Gate: acceptance criteria verified in browser tests. These are the user-facing correctness gate.
+**Vue SPA — component and edge-case tests (Vitest + Vue Test Utils)**
+- Component-level tests cover rendering, props, emitted events, form validation, and error states without a browser.
+- Live in the frontend project's own test suite, isolated from the Go test suite.
+- Gate: component tests pass before a screen is considered complete.
+
+**Vue SPA — acceptance tests (Playwright, narrow scope)**
+- Reserved for one end-to-end test per feature, covering only the main success flow (e.g., "add a member" happy path) against a live server and real database.
+- Not used for edge cases, validation errors, or exhaustive interaction coverage — those belong to Vitest/Vue Test Utils.
+- Gate: the main success flow of each shipped feature has a passing Playwright test before the feature is marked Done in `docs/roadmap.md`.
 
 ---
 
@@ -423,11 +384,23 @@ The coordinator layer is the testability boundary for business logic. Tests isol
 
 Architectural decisions for this project are recorded in `docs/adr/`. Key decisions:
 
-- [ADR-20260915-clean-architecture-layering.md](adr/ADR-20260915-clean-architecture-layering.md) — Clean architecture with coordinators as the orchestration layer
-- [ADR-20260915-spa-frontend-stack.md](adr/ADR-20260915-spa-frontend-stack.md) — HTMX + Alpine.js + Go templates for SPA frontend
+- [ADR-20260917-vue-spa-frontend.md](adr/ADR-20260917-vue-spa-frontend.md) — Vue 3 SPA frontend, API-only backend (supersedes the HTMX/Alpine decision)
+- [ADR-20260916-hexagonal-architecture-member-crud.md](adr/ADR-20260916-hexagonal-architecture-member-crud.md) — Hexagonal architecture (ports & adapters) for member CRUD
+- [ADR-20260915-clean-architecture-layering.md](adr/ADR-20260915-clean-architecture-layering.md) — Clean architecture layering (historical; superseded in part by the hexagonal ADR above)
+- [ADR-20260915-spa-frontend-stack.md](adr/ADR-20260915-spa-frontend-stack.md) — HTMX + Alpine.js + Go templates (superseded by ADR-20260917)
 - [ADR-20260913-sqlite-local-storage.md](adr/ADR-20260913-sqlite-local-storage.md) — SQLite for local-only persistence
 - [ADR-20260913-pure-go-sqlite-driver.md](adr/ADR-20260913-pure-go-sqlite-driver.md) — `modernc.org/sqlite` to avoid CGO
 
 ---
 
-**Last updated:** 2026-09-15 — Refactored for SPA-first, HTTP-driven architecture. Removed Fyne desktop UI. Introduced coordinator orchestration layer.
+## Update Policy
+
+Update this file when:
+- A service (container) is added, removed, or its technology changes
+- A communication path between services changes
+- A new external system dependency is added
+- A critical constraint changes
+
+Do NOT update for internal refactors, new features within an existing service, or test changes.
+
+**Last updated:** 2026-09-17 — Transitioned from single-binary desktop app to multi-service Docker architecture. Frontend and backend now in separate containers, orchestrated via docker-compose. Database persistence via volume mounts. All communication over HTTP/JSON network API.

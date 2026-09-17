@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./services/backend
+      dockerfile: Dockerfile
+    image: leadpulse-backend:latest
+    container_name: leadpulse-backend
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: "sqlite:///data/data.db"
+    volumes:
+      - data:/data
+    networks:
+      - leadpulse-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: ./services/frontend
+      dockerfile: Dockerfile
+    image: leadpulse-frontend:latest
+    container_name: leadpulse-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: "http://backend:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - leadpulse-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  data:
+    driver: local
+
+networks:
+  leadpulse-network:
+    driver: bridge
