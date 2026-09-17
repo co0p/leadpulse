@@ -15,12 +15,14 @@ Shared decisions for the web application shell and future screens. Use these pat
 
 **Flexbox-based structure:**
 ```
-body (display: flex, flex-direction: column, height: 100vh)
-  ├─ header.topbar (height: 56px, flex-shrink: 0)
-  └─ .app-container (display: flex, flex: 1, overflow: hidden)
-     ├─ aside.sidebar (width: 260px desktop, overlay mobile; flex-shrink: 0)
-     ├─ .sidebar-overlay (display: none; visible on mobile when sidebar open)
-     └─ main.main-content (flex: 1, overflow-y: auto)
+#app (display: flex, flex-direction: column, height: 100vh)
+  └─ .app-shell (display: flex, flex-direction: column, height: 100vh)
+       ├─ header.app-topbar (height: 56px, flex-shrink: 0)
+       ├─ .app-container (display: flex, flex: 1, overflow: hidden, position: relative)
+       │    ├─ aside.app-sidebar (width: 260px desktop, overlay mobile; flex-shrink: 0)
+       │    ├─ .app-sidebar-overlay (v-if; visible on mobile when sidebar open)
+       │    └─ main.app-main (flex: 1, overflow-y: auto)
+       └─ footer.app-footer (flex-shrink: 0)
 ```
 
 ---
@@ -39,15 +41,15 @@ body (display: flex, flex-direction: column, height: 100vh)
 ```css
 /* Mobile first: overlay sidebar by default */
 @media (max-width: 1023px) {
-  .sidebar { position: absolute; left: 0; top: 56px; transform: translateX(-100%); }
-  .sidebar.is-active { transform: translateX(0); }
+  .app-sidebar { position: absolute; left: 0; top: 0; bottom: 0; transform: translateX(-100%); }
+  .app-sidebar.app-sidebar--open { transform: translateX(0); }
 }
 
 /* Tablet/mobile: tighter spacing */
 @media (max-width: 767px) {
-  .topbar { padding: 0 0.75rem; }
-  .topbar-center .field { max-width: 200px; }
-  .main-content { padding: 0.75rem; }
+  .app-topbar { padding: 0 0.75rem; }
+  .app-topbar-center .field { max-width: 200px; }
+  .app-main { padding: 0.75rem; }
 }
 ```
 
@@ -88,11 +90,11 @@ body (display: flex, flex-direction: column, height: 100vh)
 - **Footer:** Primary action button (e.g., "+ Add Item"), padding 1rem, sticky at bottom
 
 **Colors & spacing:**
-- Background: #f5f5f5
-- Border: 1px solid #e8e8e8
-- Link padding: 0.75rem 1rem
-- Link hover: background #ebebeb
-- Menu label: 0.85rem, uppercase, #7a7a7a
+- Background: `var(--bulma-scheme-main-bis)` (≈ #f5f5f5)
+- Border: `var(--bulma-border)` (≈ #dbdbdb)
+- Link padding: 0.75rem 1rem (provided by Bulma `menu-list`)
+- Link hover: provided by Bulma `menu-list a:hover`
+- Menu label: Bulma `menu-label` class (0.75em, uppercase, `var(--bulma-text-weak)`)
 
 ---
 
@@ -102,7 +104,7 @@ body (display: flex, flex-direction: column, height: 100vh)
 
 **Padding:** 1.25rem desktop, 0.75rem mobile.
 
-**Background:** #fafafa (light gray to distinguish from white shell).
+**Background:** `var(--bulma-scheme-main-ter)` (≈ #fafafa, light gray to distinguish from white shell).
 
 **Sections:** Use Bulma `.section` and `.container` for consistent spacing and max-width management.
 
@@ -127,14 +129,14 @@ body (display: flex, flex-direction: column, height: 100vh)
 **Keyboard navigation:**
 - Tab order flows: toggle → search → quick actions → sidebar links → content
 - Esc key closes sidebar on mobile/tablet
-- All interactive elements (buttons, links, inputs) receive focus outline: `2px solid #3273dc`, offset 2px
+- All interactive elements (buttons, links, inputs) receive focus outline on keyboard focus (`:focus-visible`): `2px solid var(--bulma-link)`, offset 2px. Bulma handles this natively on its own form and button elements; custom elements should match the same pattern.
 - No negative `tabindex` (all elements naturally focusable)
 
 **Focus states:**
-- Buttons: `outline: 2px solid #3273dc; outline-offset: 2px;`
-- Links: same outline + hover background color change
-- Inputs: `outline` + `border-color: #3273dc` on focus
-- High contrast color (#3273dc on white background) meets AA requirements
+- Buttons: Bulma handles `:focus-visible` natively. Custom buttons: `outline: 2px solid var(--bulma-link); outline-offset: 2px;` on `:focus-visible` only (not `:focus`, to avoid outlines on mouse click).
+- Links: same outline pattern on `:focus-visible` + hover background color change
+- Inputs: Bulma handles `:focus-visible` natively with border-color change. Custom inputs follow the same rule.
+- High contrast: `var(--bulma-link)` (≈ #3273dc) on white background meets AA requirements.
 
 **Color contrast:** All text on backgrounds meets 4.5:1 ratio for normal text, 3:1 for large text (≥18pt or ≥14pt bold).
 
@@ -143,9 +145,13 @@ body (display: flex, flex-direction: column, height: 100vh)
 ## CSS Framework & Dependencies
 
 **Bulma CSS:** Base responsive framework, bundled with the Vue build and embedded in the binary via the compiled SPA's static assets.
-- Used for button, input, level, box, container, section, title classes
+- Used for `button`, `input`, `field`, `control`, `icon`, `icon-text`, `menu`, `menu-list`, `level`, `level-left`, `level-right`, `level-item`, `is-size-*`, `has-text-*`, `has-text-weight-*`, `section`, `container`, `box`, `title` classes
 - Media query breakpoints: desktop (≥1024px), tablet (769–1023px), mobile (≤768px)
 - Applied as class names directly in Vue single-file component templates
+- **Bulma v1 CSS custom properties** — use `var(--bulma-*)` tokens in scoped component CSS instead of hardcoded hex values. Key tokens: `--bulma-scheme-main` (white), `--bulma-scheme-main-bis` (near-white), `--bulma-scheme-main-ter` (light gray), `--bulma-border`, `--bulma-text`, `--bulma-text-weak`, `--bulma-link`. Hardcoded hex values will not respond to theme changes.
+- **`menu` component structure** — sidebar navigation must follow the Bulma `menu` pattern exactly: `<aside class="menu"> > <ul class="menu-list">`. Do not apply `menu-list` without the parent `menu` element; Bulma's hover, color, and spacing styles depend on the full structure.
+- **`level` component** — use `<nav class="level">` with `level-left`/`level-right`/`level-item` for horizontal layouts that need space-between distribution (e.g., footer, toolbar rows). Do not write bespoke `justify-content: space-between` flexbox when `level` applies.
+- **`is-active` modifier** — reserved for Bulma's own semantic active-state (e.g., `menu-list a.is-active` for the current route). Do not use `is-active` to drive show/hide toggling of custom elements; use a descriptive BEM modifier instead (e.g., `app-sidebar--open`).
 
 **Vue Router:** Client-side routing and shell/content composition. A persistent `AppShell.vue` layout component wraps routed screens, guaranteeing the shell is always present around feature content.
 
@@ -159,9 +165,9 @@ body (display: flex, flex-direction: column, height: 100vh)
 
 **Sidebar toggle (mobile/tablet):**
 1. User clicks toggle button
-2. Sidebar open/closed state lives in a Pinia store (or local component state), toggled on click
-3. Sidebar class bound reactively (e.g., `:class="{ 'is-active': sidebarOpen }"`) slides in
-4. Overlay bound the same way dims background
+2. Sidebar open/closed state lives in local component state (`sidebarOpen` ref), toggled on click
+3. Sidebar modifier class bound reactively (e.g., `:class="{ 'app-sidebar--open': sidebarOpen }"`) triggers CSS transform
+4. Overlay rendered conditionally (`v-if="sidebarOpen"`) dims background
 5. Clicking overlay or pressing Esc closes sidebar
 
 **Search input:**
@@ -179,11 +185,14 @@ body (display: flex, flex-direction: column, height: 100vh)
 ## Color Palette
 
 **Functional colors:**
-- Primary action: Bulma blue (#3273dc) — used for active states, focus outlines, primary buttons
-- Background: #fafafa (light gray)
-- Borders: #e8e8e8
-- Text: #4a4a4a (standard), #7a7a7a (secondary labels)
-- Header/Sidebar: #2c3e50 (dark brand color for logo)
+- Primary action: `var(--bulma-link)` (≈ #3273dc) — used for active states, focus outlines, primary buttons
+- Background: `var(--bulma-scheme-main-ter)` (≈ #fafafa, light gray)
+- Borders: `var(--bulma-border)` (≈ #dbdbdb)
+- Text: `var(--bulma-text)` (standard), `var(--bulma-text-weak)` (secondary labels)
+- Shell background (topbar, footer): `var(--bulma-scheme-main)` (white)
+- Sidebar background: `var(--bulma-scheme-main-bis)` (near-white / light gray)
+
+Do not use hardcoded hex values for colors that map to Bulma tokens. Reserve raw hex only for values with no Bulma equivalent (e.g., the overlay `rgba(0, 0, 0, 0.5)`).
 
 **Overlay:** rgba(0, 0, 0, 0.5) — semi-transparent black for sidebar overlay
 
@@ -222,8 +231,10 @@ All new feature screens must:
 1. Use the 3-region layout (header + sidebar + main content) via the shared `AppShell.vue` layout and Vue Router nested routes
 2. Respect responsive breakpoints (desktop/tablet/mobile)
 3. Follow accessibility target (WCAG 2.1 AA)
-4. Use Bulma CSS classes established in the shell
-5. Test focus states, keyboard navigation, and screen reader compatibility (component tests plus manual browser verification)
+4. Use Bulma CSS classes and `var(--bulma-*)` CSS custom properties — no hardcoded hex values for colors that map to Bulma tokens
+5. Follow Bulma component structure rules: `menu > menu-list` for navigation, `level` for horizontal space-between layouts, `is-active` only for Bulma's semantic active-state
+6. Use `:focus-visible` (not `:focus`) for custom focus ring styles
+7. Test focus states, keyboard navigation, and screen reader compatibility (component tests plus manual browser verification)
 
 ---
 

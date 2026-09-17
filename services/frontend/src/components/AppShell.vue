@@ -1,8 +1,8 @@
 <template>
   <div class="app-shell">
     <!-- Top bar -->
-    <header class="topbar" role="banner">
-      <div class="topbar-left">
+    <header class="app-topbar" role="banner">
+      <div class="app-topbar-left">
         <button
           class="button is-white sidebar-toggle"
           type="button"
@@ -14,14 +14,12 @@
             <i class="fas fa-bars"></i>
           </span>
         </button>
-        <div class="breadcrumb-area">
-          <span class="breadcrumb-text">{{ pageTitle }}</span>
-        </div>
+        <span class="app-page-title">{{ pageTitle }}</span>
       </div>
 
-      <div class="topbar-center">
-        <div class="field has-addons is-fullwidth">
-          <p class="control is-expanded has-icons-left">
+      <div class="app-topbar-center">
+        <div class="field is-fullwidth">
+          <p class="control has-icons-left">
             <input
               class="input"
               type="text"
@@ -35,7 +33,7 @@
         </div>
       </div>
 
-      <div class="topbar-right">
+      <div class="app-topbar-right">
         <div class="buttons">
           <button
             class="button is-ghost"
@@ -64,47 +62,56 @@
     <div class="app-container">
       <!-- Sidebar -->
       <aside
-        class="sidebar"
-        :class="{ 'is-active': sidebarOpen }"
+        class="app-sidebar"
+        :class="{ 'app-sidebar--open': sidebarOpen }"
         role="navigation"
+        aria-label="Main navigation"
       >
-        <div class="sidebar-header">
-          <div class="logo">
-            <h2>LeadPulse</h2>
-          </div>
+        <div class="app-sidebar-header">
+          <p class="is-size-5 has-text-weight-semibold">LeadPulse</p>
         </div>
 
-        <nav class="sidebar-nav">
-          <ul class="menu-list">
-            <li>
-              <RouterLink to="/" @click="closeSidebar">
-                <span class="icon"><i class="fas fa-home"></i></span>
-                <span>Home</span>
-              </RouterLink>
-            </li>
-            <li>
-              <RouterLink to="/members" @click="closeSidebar">
-                <span class="icon"><i class="fas fa-users"></i></span>
-                <span>Members</span>
-              </RouterLink>
-            </li>
-            <li>
-              <RouterLink to="/alerts" @click="closeSidebar">
-                <span class="icon"><i class="fas fa-exclamation-circle"></i></span>
-                <span>Alerts</span>
-              </RouterLink>
-            </li>
-            <li>
-              <RouterLink to="/reports" @click="closeSidebar">
-                <span class="icon"><i class="fas fa-chart-bar"></i></span>
-                <span>Reports</span>
-              </RouterLink>
-            </li>
-          </ul>
+        <nav class="app-sidebar-nav">
+          <aside class="menu">
+            <ul class="menu-list">
+              <li>
+                <RouterLink to="/" @click="closeSidebar">
+                  <span class="icon-text">
+                    <span class="icon"><i class="fas fa-home"></i></span>
+                    <span>Home</span>
+                  </span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink to="/members" @click="closeSidebar">
+                  <span class="icon-text">
+                    <span class="icon"><i class="fas fa-users"></i></span>
+                    <span>Members</span>
+                  </span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink to="/alerts" @click="closeSidebar">
+                  <span class="icon-text">
+                    <span class="icon"><i class="fas fa-exclamation-circle"></i></span>
+                    <span>Alerts</span>
+                  </span>
+                </RouterLink>
+              </li>
+              <li>
+                <RouterLink to="/reports" @click="closeSidebar">
+                  <span class="icon-text">
+                    <span class="icon"><i class="fas fa-chart-bar"></i></span>
+                    <span>Reports</span>
+                  </span>
+                </RouterLink>
+              </li>
+            </ul>
+          </aside>
         </nav>
 
-        <div class="sidebar-footer">
-          <button class="button is-fullwidth is-primary" type="button">
+        <div class="app-sidebar-footer">
+          <button class="button is-primary is-fullwidth" type="button">
             <span class="icon-text">
               <span class="icon"><i class="fas fa-plus"></i></span>
               <span>Add Item</span>
@@ -115,28 +122,32 @@
 
       <!-- Sidebar overlay for mobile -->
       <div
-        class="sidebar-overlay"
-        :class="{ 'is-active': sidebarOpen }"
+        v-if="sidebarOpen"
+        class="app-sidebar-overlay"
         role="presentation"
         @click="closeSidebar"
       ></div>
 
       <!-- Main content -->
-      <main class="main-content" role="main">
+      <main class="app-main" role="main">
         <RouterView />
       </main>
     </div>
 
     <!-- Footer -->
     <footer class="app-footer" role="contentinfo">
-      <div class="footer-content">
-        <div class="footer-left">
-          <p>&copy; 2026 LeadPulse. All rights reserved.</p>
+      <nav class="level is-mobile">
+        <div class="level-left">
+          <div class="level-item">
+            <p class="is-size-7 has-text-grey">&copy; 2026 LeadPulse. All rights reserved.</p>
+          </div>
         </div>
-        <div class="footer-right">
-          <HealthIndicator />
+        <div class="level-right">
+          <div class="level-item">
+            <HealthIndicator />
+          </div>
         </div>
-      </div>
+      </nav>
     </footer>
   </div>
 </template>
@@ -174,52 +185,34 @@ function closeSidebar() {
   }
 }
 
-// Handle window resize
 onMounted(() => {
   window.addEventListener('resize', () => {
-    if (window.innerWidth >= 1024) {
-      sidebarOpen.value = true
-    } else {
-      sidebarOpen.value = false
-    }
+    sidebarOpen.value = window.innerWidth >= 1024
   })
 
-  // Handle escape key to close sidebar on mobile
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeSidebar()
-    }
+    if (e.key === 'Escape') closeSidebar()
   })
 
-  // Trigger health check on app mount
   healthStore.checkHealth()
 })
 </script>
 
 <style scoped>
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100vh;
-  overflow: hidden;
-}
-
+/* ── Shell frame ─────────────────────────────────────────────────── */
 .app-shell {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #fafafa;
+  overflow: hidden;
+  background-color: var(--bulma-scheme-main-ter, #fafafa);
 }
 
-.topbar {
+/* ── Top bar ─────────────────────────────────────────────────────── */
+.app-topbar {
   height: 56px;
-  background-color: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  background-color: var(--bulma-scheme-main, #fff);
+  border-bottom: 1px solid var(--bulma-border, #dbdbdb);
   display: flex;
   align-items: center;
   padding: 0 1.25rem;
@@ -228,69 +221,54 @@ body {
   z-index: 10;
 }
 
-.topbar-left {
+.app-topbar-left {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   min-width: 200px;
 }
 
-.topbar-center {
+.app-page-title {
+  font-size: 0.95rem;
+  color: var(--bulma-text-weak, #7a7a7a);
+}
+
+.app-topbar-center {
   flex: 1;
   display: flex;
   justify-content: center;
   min-width: 0;
 }
 
-.topbar-center .field {
+.app-topbar-center .field {
   width: 100%;
   max-width: 400px;
 }
 
-.topbar-right {
+.app-topbar-right {
   display: flex;
   align-items: center;
   min-width: 120px;
+  justify-content: flex-end;
 }
 
 .sidebar-toggle {
-  padding: 0.5rem;
   min-width: 44px;
 }
 
-.sidebar-toggle:focus {
-  outline: 2px solid #3273dc;
-  outline-offset: 2px;
-}
-
-.button:focus {
-  outline: 2px solid #3273dc;
-  outline-offset: 2px;
-}
-
-.input:focus {
-  outline: 2px solid #3273dc;
-  outline-offset: 2px;
-  border-color: #3273dc;
-}
-
-.breadcrumb-area {
-  display: flex;
-  align-items: center;
-  font-size: 0.95rem;
-  color: #7a7a7a;
-}
-
+/* ── App body (sidebar + main) ───────────────────────────────────── */
 .app-container {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
-.sidebar {
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+.app-sidebar {
   width: 260px;
-  background-color: #f5f5f5;
-  border-right: 1px solid #e8e8e8;
+  background-color: var(--bulma-scheme-main-bis, #f5f5f5);
+  border-right: 1px solid var(--bulma-border, #dbdbdb);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -298,171 +276,92 @@ body {
   z-index: 5;
 }
 
-.sidebar-header {
-  padding: 1.5rem 1.25rem;
-  border-bottom: 1px solid #e8e8e8;
+.app-sidebar-header {
+  padding: 1.25rem 1rem;
+  border-bottom: 1px solid var(--bulma-border, #dbdbdb);
   flex-shrink: 0;
 }
 
-.sidebar-header .logo h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #2c3e50;
-  margin: 0;
-}
-
-.sidebar-nav {
+.app-sidebar-nav {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 0;
+  padding: 0.75rem 0.5rem;
 }
 
-.menu-list {
-  list-style: none;
-  padding: 0 0.5rem;
-}
-
-.menu-list li {
-  margin: 0;
-}
-
-.menu-list a {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
-  color: #4a4a4a;
-  text-decoration: none;
-  border-radius: 4px;
-  transition: background-color 0.2s;
-}
-
-.menu-list a:hover {
-  background-color: #ebebeb;
-}
-
-.menu-list a:focus {
-  outline: 2px solid #3273dc;
-  outline-offset: 2px;
-}
-
-.sidebar-footer {
-  padding: 1rem 0.5rem;
-  border-top: 1px solid #e8e8e8;
+.app-sidebar-footer {
+  padding: 0.75rem 0.5rem;
+  border-top: 1px solid var(--bulma-border, #dbdbdb);
   flex-shrink: 0;
 }
 
-.sidebar-footer .button {
-  font-size: 0.9rem;
-}
-
-.main-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  background-color: #fafafa;
-}
-
-.sidebar-overlay {
-  display: none;
+/* ── Sidebar overlay (mobile) ────────────────────────────────────── */
+.app-sidebar-overlay {
   position: absolute;
-  top: 56px;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 4;
 }
 
-.sidebar-overlay.is-active {
-  display: block;
+/* ── Main content ────────────────────────────────────────────────── */
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: var(--bulma-scheme-main-ter, #fafafa);
 }
 
+/* ── Footer ──────────────────────────────────────────────────────── */
 .app-footer {
-  height: 56px;
-  background-color: #fff;
-  border-top: 1px solid #e8e8e8;
-  display: flex;
-  align-items: center;
+  background-color: var(--bulma-scheme-main, #fff);
+  border-top: 1px solid var(--bulma-border, #dbdbdb);
   padding: 0 1.25rem;
   flex-shrink: 0;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
 }
 
-.footer-content {
+.app-footer .level {
   width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  margin-bottom: 0;
 }
 
-.footer-left p {
-  font-size: 0.85rem;
-  color: #7a7a7a;
-  margin: 0;
-}
-
-.footer-right {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* Responsive */
+/* ── Responsive: sidebar slides in on mobile ─────────────────────── */
 @media screen and (max-width: 1023px) {
-  .sidebar {
+  .app-sidebar {
     position: absolute;
     left: 0;
-    top: 56px;
-    height: calc(100vh - 56px);
+    top: 0;
+    bottom: 0;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
-    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12);
   }
 
-  .sidebar.is-active {
+  .app-sidebar.app-sidebar--open {
     transform: translateX(0);
   }
 }
 
 @media screen and (max-width: 767px) {
-  .topbar {
+  .app-topbar {
     padding: 0 0.75rem;
     gap: 0.5rem;
   }
 
-  .topbar-center .field {
-    max-width: 200px;
-  }
-
-  .topbar-center .input {
-    font-size: 14px;
-  }
-
-  .topbar-right .buttons {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .topbar-right .button {
-    padding: 0.5rem;
-    min-width: auto;
+  .app-topbar-center .field {
+    max-width: 180px;
   }
 
   .app-footer {
-    flex-direction: column;
-    height: auto;
-    padding: 0.75rem 1.25rem;
-    gap: 0.5rem;
+    min-height: auto;
+    padding: 0.75rem;
   }
 
-  .footer-content {
+  .app-footer .level {
     flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .footer-left p {
-    font-size: 0.75rem;
+    gap: 0.25rem;
   }
 }
 </style>
