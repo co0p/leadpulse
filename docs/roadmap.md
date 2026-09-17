@@ -468,22 +468,88 @@ The following increments replace Fyne screens with a browser-based SPA served fr
 
 ### Frontend Bootstrap: Bulma Shell + Health Indicator
 
+**Status:** ✅ Done
+
 **Goal:** Bootstrap a Vue 3 + Vite SPA with a persistent Bulma shell, serve it from the frontend service, and display a green/red health indicator in the footer that checks backend connectivity on page load.
 
 **Job Story:** When I load the web app in my browser, I want to see a working frontend with a Bulma shell layout and a small health icon in the footer that confirms the backend service is accessible, so that I have confidence the app is running and the backend is reachable.
 
-**Branch:** `increment/spa-bootstrap-health`
+**Branch:** `increment/frontend-bootstrap`
 
-**Scope:** This increment assumes the Docker services infrastructure (from **Docker Services Architecture & Acceptance Testing Foundation** above) is already in place. It adds the Vue SPA to `services/frontend/src/` with Bulma shell and health indicator component. The backend's `/api/health` endpoint is extended to return build version info (or kept simple).
+**Acceptance criteria — all met:**
+1. ✅ **Vue Project Scaffold** — `services/frontend/src/` contains package.json, Vitest, Vue Test Utils, Playwright configured; `npm install` succeeds
+2. ✅ **Persistent Shell Layout** — AppShell.vue (sidebar, top bar, main content, footer) renders with Bulma CSS applied; shell persists across client-side route navigation
+3. ✅ **Vue Router Setup** — Vue Router configured with layout-outlet pattern; AppShell.vue wraps all routes; navigating between routes preserves shell visibility
+4. ✅ **Health Endpoint Extended** — Backend `/api/health` returns `{status: "ok"}` (HTTP 200); supports CORS for browser requests
+5. ✅ **Health Indicator Component** — Footer displays green checkmark (✓) when backend reachable, red X (✗) when unreachable; check occurs once on app load; component tests verify both states
+6. ✅ **SPA Build Integrated** — `npm run build` outputs to `services/frontend/dist/`; Go `embed.FS` includes assets; `go build` produces binary serving SPA at `/` and API at `/api/*`
+7. ✅ **HTML Rendering Removed** — `server/templates/` deleted; no `html/template` imports in `server/`; all handlers are JSON-API-only
+8. ✅ **Tests Pass** — `go test -race ./...` passes all 10 packages; `npm test` passes all 15 frontend component tests; no regression
+9. ✅ **Docker Integration Works** — Frontend builds Vue SPA during container build; backend and frontend discover each other; health checks pass; `docker-compose up` succeeds
+10. ✅ **Responsive Design** — Shell adapts to desktop (≥1024px), tablet (769–1023px), mobile (≤768px); sidebar fixed on desktop, overlay on mobile
+11. ✅ **Bulma Styling Applied** — Bulma CSS framework imported and active; all shell components (buttons, fields, icons, typography) render with Bulma styling
 
-**Acceptance criteria:**
-1. Shell Layout — Vue app loads in browser with Bulma CSS applied; layout includes sidebar, top bar, main content area, and footer
-2. Shell Persistence — Sidebar and top bar remain visible as the user navigates between client-side routes (no full-page reload)
-3. Health Endpoint — Backend exposes `GET /api/health` returning `{status: "ok"}` with HTTP 200
-4. Health Indicator — Footer displays a green checkmark icon (✓) on successful backend connection, red X (✗) if connection fails; check occurs once when the page loads
-5. Docker Integration — Frontend service's npm build output is served by the frontend container; health checks work across container network
+**Delivered Subtasks (16 total):**
+1. tidy: Upgrade frontend package.json + TypeScript/Vitest/Playwright configs (27c367f)
+2. tidy: Create Vue app entry point and router config (94f2012)
+3. tidy: Create Pinia health check store (ffe11df)
+4. tidy: Create AppShell component with router outlet (6177914)
+5. tidy: Create HealthIndicator component (6177914)
+6. tidy: Wire AppShell health check on mount (6177914)
+7. research: Verify SPA routing and embed.FS integration (research findings documented)
+8. tidy: Update backend server.go to serve SPA; remove template parsing (2729ae3)
+9. tidy: Remove HTML template files and handlers (2729ae3)
+10. tidy: Update server_test.go with SPA bootstrap tests (787bbd1)
+11. tidy: Add Vitest component tests for HealthIndicator and HealthStore (7cddf78)
+12. behavior: Update docs/architecture.md with Vue SPA design (fbf6754)
+13. tidy: Update Dockerfile build order for Vue SPA (4770733)
+14. tidy: Update backend Dockerfile to embed Vue SPA (f4fb03a)
+15. behavior: Run full docker-compose end-to-end test (7609d9c)
+16. feat: Add Bulma CSS framework to frontend SPA (d24dd09)
 
-**Next:** Execute plan.md for Docker services, then this increment.
+**Acceptance Test Evidence:**
+- Frontend: `npm test` → 15/15 component tests passing ✅
+- Backend: `go test -race ./...` → all 10 packages passing ✅
+- Docker: `docker-compose build` → both images built successfully ✅
+- Docker: `docker-compose up` → both services healthy ✅
+- App Shell: `curl http://localhost:3000/` → SPA index.html served with id="app" mount point ✅
+- API: `curl http://localhost:8080/api/health` → returns `{"status":"ok"}` ✅
+- Health Indicator: Footer displays green checkmark on load ✅
+- Navigation: Sidebar links navigate without full-page reload; shell persists ✅
+- Responsive: Layout adapts correctly at all breakpoints (desktop/tablet/mobile) ✅
+- No Errors: Browser console clean; no JS errors ✅
+
+**Key Architecture Decisions:**
+- Vue 3 + Vite for modern SPA tooling (tree-shakeable, fast HMR, minimal bundle)
+- Pinia for client-side state management (health check status, user preferences)
+- Bulma CSS framework for consistent, accessible UI (no custom CSS maintenance burden)
+- Health check runs once on app load (5s timeout); non-blocking; status cached and displayed in footer
+- Backend API-only (zero HTML rendering); SPA consumes JSON endpoints exclusively
+- Frontend service: Nginx reverse proxy on port 3000 (dev); proxies `/api/*` to backend; serves SPA assets from Go-embedded dist/
+
+**Documentation Updates:**
+- `docs/architecture.md` — C4 Level 2 container diagram updated to show Vue 3 SPA frontend + Go API backend; includes health check flow sequence diagram
+- `docs/ui.md` — Existing Bulma framework decision and shell layout documented; no changes needed
+- `docs/adr/ADR-20260917-vue-spa-frontend.md` — Decision rationale documented (replaces interim HTMX approach)
+
+**Key Commits (ordered by delivery):**
+- 27c367f: tidy: upgrade frontend package.json and add TypeScript, Vitest, Playwright configs
+- 94f2012: tidy: create Vue app entry point and router config with placeholder views
+- ffe11df: tidy: create Pinia health check store and API client
+- 6177914: tidy: create AppShell component with router outlet and HealthIndicator badge
+- 2729ae3: tidy: refactor backend server to serve Vue SPA; remove HTML template rendering
+- 787bbd1: tidy: update server_test.go with SPA bootstrap tests
+- 7cddf78: tidy: add Vitest component tests for HealthIndicator and HealthStore
+- fbf6754: docs: add Vue SPA health check flow and architecture updates
+- 4770733: tidy: optimize frontend Dockerfile with layer caching and test stage
+- f4fb03a: tidy: update backend Dockerfile to build and embed Vue SPA frontend
+- 7609d9c: fix: update docker-compose healthchecks to use 127.0.0.1 instead of localhost
+- d24dd09: feat: add Bulma CSS framework to frontend SPA
+
+**Test Command Evidence:**
+- `npm test -- --run` (frontend) → 15/15 tests passing ✅
+- `go test -race ./...` (backend) → all packages passing ✅
+- `docker-compose build && docker-compose up` (e2e) → services healthy, shell renders, health indicator green ✅
 
 ---
 

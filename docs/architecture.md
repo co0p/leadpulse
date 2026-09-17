@@ -98,11 +98,83 @@ docker-compose up --build:
 - **Health Check:** HTTP 200 on `http://localhost:3000/`
 - **Network:** Joined to `leadpulse-network` docker-compose network; can reach backend as `http://backend:8080`
 
+**Frontend Stack:**
+- **Vue 3 + Vite:** Build tool-driven single-page app (SPA)
+- **Vue Router:** Client-side routing for /members, /alerts, /reports, etc. Root handler (/) serves index.html; Vue Router handles rest
+- **Pinia:** State management (health check status, lastCheckedAt, checkError)
+- **Bulma CSS:** Responsive design (fixed sidebar ≥1024px, overlay mobile ≤768px)
+- **Components:**
+  - **AppShell:** Persistent layout wrapper (sidebar, topbar, main content, footer); renders `<RouterView />` for screen content
+  - **HealthIndicator:** Badge in footer; three states: healthy (green ✓), unhealthy (red ✗), checking (spinner)
+- **Health Check:** Async `checkHealth()` action runs on app mount (non-blocking); fetches `/api/health` with 5s timeout; updates store state (healthy | unhealthy | checking)
+
 **Responsibility:**
-- Serve Vue 3 SPA (AppShell component with sidebar, topbar, footer, health indicator)
-- Route static assets
+- Serve Vue 3 SPA with persistent AppShell layout
+- Route static assets (CSS, JS, images)
 - Proxy `/api/*` requests to backend service
-- Display health status of backend (green/red indicator in footer)
+- Display real-time health status of backend via HealthIndicator badge
+- Execute client-side navigation without full page reloads (Vue Router handles routing)
+- No server-side rendering or templating
+
+---
+
+## Health Check Flow (Vue SPA to Backend)
+
+**Sequence Diagram:**
+
+```
+┌──────────┐                          ┌─────────────────┐          ┌──────────┐
+│ Browser  │                          │ Vue App (Pinia) │          │ Backend  │
+│ (User)   │                          │ + HealthIndicator          │ /api/    │
+└────┬─────┘                          └────────┬────────┘          └────┬─────┘
+     │                                         │                       │
+     │ 1. Load http://localhost:3000           │                       │
+     ├────────────────────────────────────────►│                       │
+     │                                         │                       │
+     │ 2. Render AppShell                      │                       │
+     │ (HealthIndicator in footer,             │                       │
+     │  status: 'checking', spinner visible)   │                       │
+     │◄────────────────────────────────────────┤                       │
+     │                                         │                       │
+     │                                  3. onMounted() fires           │
+     │                                  checkHealth() action           │
+     │                                         │                       │
+     │                                  4. Pinia dispatch             │
+     │                                  (status: 'checking')           │
+     │                                         │                       │
+     │                                         │ 5. Fetch /api/health  │
+     │                                         ├──────────────────────►│
+     │                                         │                       │
+     │                                         │                       │
+     │                                    6. HTTP 200 {status: "ok"}   │
+     │                                         │◄──────────────────────┤
+     │                                         │                       │
+     │                                  7. Update store               │
+     │                                  (status: 'healthy',           │
+     │                                   lastCheckedAt: now)          │
+     │                                         │                       │
+     │ 8. HealthIndicator watches store      │                       │
+     │ and re-renders (green ✓)               │                       │
+     │◄────────────────────────────────────────┤                       │
+     │                                         │                       │
+     │ (No re-check on subsequent navigation)  │                       │
+     │                                         │                       │
+```
+
+**Key characteristics:**
+- Health check runs **once** on app mount, **not** on every navigation
+- Status stored in Pinia (survives client-side route changes)
+- Async/non-blocking: UI renders while fetch is in-flight
+- 5-second timeout on fetch (AbortController)
+- Error states stored (`checkError` field for display/logging)
+
+**State transitions:**
+| Event | Status Before | Status After | Display |
+|-------|---------------|--------------|---------|
+| App mounts | (none) | checking | Spinner |
+| /api/health returns 200 | checking | healthy | Green ✓ |
+| /api/health fails or timeout | checking | unhealthy | Red ✗ + error message |
+| User navigates (Vue Router) | healthy/unhealthy | (unchanged) | Persists from last check |
 
 ### Backend Service (`services/backend/`)
 
