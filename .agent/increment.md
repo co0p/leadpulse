@@ -1,108 +1,93 @@
-# Increment: Frontend Bootstrapping
+# Increment: Members Screen (Vue 3)
 
 ## Use Case
 
-When I load the web app in my browser, I want to see a working Vue 3 SPA with a persistent Bulma shell (sidebar, top bar, main content area), a green/red health indicator in the footer confirming backend connectivity, and client-side routes that preserve the shell as I navigate, so that I have a professional, polished foundation to build screens on and confidence the backend is accessible.
-
----
+When I open the Members screen in the SPA, I want to view, add, edit, and manage the status of team members with a responsive form interface, so that I can keep the team roster current and control which members appear in scoring and alerts.
 
 ## Goal
 
-Bootstrap a Vue 3 + Vite SPA with a persistent app shell, health check indicator, and clean JSON-API-only backend; delete all HTML rendering from the Go server.
-
----
+Build the Members screen in Vue 3 with full CRUD operations (list, add, edit, deactivate, reactivate) against the existing Members API (`/api/members`), achieving parity with the prior Fyne desktop screen.
 
 ## Branch
 
-`increment/frontend-bootstrap`
-
----
+`increment/members-screen-vue`
 
 ## Acceptance Criteria
 
-1. **Vue Project Scaffold** — Vue 3 + Vite project exists at `services/frontend/src/` with `package.json`, Vitest, Vue Test Utils, Playwright configured; `npm install` succeeds.
+1. **Members list displays all three filter tabs** (Active, Deactivated, All) backed by the existing status-filtered API; the shell (sidebar, top bar) remains visible and functional.
 
-2. **Persistent Shell Layout** — Vue AppShell component (sidebar, top bar, main content, footer) renders with Bulma CSS applied; shell persists across client-side route navigation without full-page reload.
+2. **Add member flow** — Navigate to `/members/add`, fill form (first name, last name, seniority dropdown), submit; redirects to `/members` list and new member appears immediately in Active tab.
 
-3. **Vue Router Setup** — Vue Router configured with a layout-outlet pattern: `AppShell.vue` wraps all routes; navigating between routes keeps the shell visible.
+3. **Edit member flow** — Click Edit on an Active member row, form pre-fills with existing data, change one or more fields, save, redirects to list and updates persist.
 
-4. **Health Endpoint Extended** — Backend `/api/health` endpoint returns `{status: "ok", version: "..."}` (version optional; status required); HTTP 200; supports CORS for browser requests.
+4. **Deactivate action** — Click Deactivate on an Active member, confirm prompt, member moves to Deactivated tab without a full page reload.
 
-5. **Health Indicator Component** — Footer displays a small health badge (green checkmark ✓ = backend reachable, red ✗ = unreachable); check occurs once on app load (not on every navigation); component tests verify both states.
+5. **Reactivate action** — Click Reactivate on a Deactivated member, member moves back to Active tab without a full page reload.
 
-6. **SPA Build Integrated** — `npm run build` outputs static assets to `services/frontend/dist/`; Go `embed.FS` includes these assets; `go build` produces binary serving SPA at `/` and API at `/api/*`.
+6. **Form validation** — Empty or invalid fields show inline error messages; submit is disabled until form is valid.
 
-7. **HTML Rendering Removed** — `server/templates/` deleted; no `html/template` imports remain in `server/` package; all handler functions remaining in `server/handler_*.go` are JSON-API-only (no HTML rendering).
+7. **Error handling** — API errors (400, 500) are caught and displayed as toast notifications or inline messages; user can retry.
 
-8. **Tests Pass** — `go test -race ./...` passes (backend); `npm test` passes (frontend component tests); no regression in existing Go test counts.
+8. **Vitest component tests pass** — MemberList, MemberForm, member store cover rendering, props, form submission, validation, and error states without a browser.
 
-9. **Docker Integration Works** — Frontend service builds Vue SPA via `npm run build` during container build; backend and frontend discover each other and health checks work across container network; `make docker-up` succeeds.
+9. **One Playwright test passes** — End-to-end flow: add a member with valid data, observe member appear in Active tab, edit seniority, verify change persists on refresh.
 
-10. **Responsive Design** — Shell layout adapts correctly to desktop (≥1024px), tablet (769–1023px), and mobile (≤768px) breakpoints; sidebar is fixed on desktop, overlay/hamburger menu on mobile.
-
----
+10. **Vue Router integration** — Routes `/members` (list) and `/members/add` and `/members/:id/edit` work; redirects on save complete successfully.
 
 ## Acceptance-Test Intent
 
-**User journey 1: App loads and health check passes**
-- Open browser to `http://localhost:8080/`
-- Shell renders (sidebar, top bar visible)
-- Footer shows green health checkmark (✓)
-- No console errors
-
-**User journey 2: Navigation preserves shell**
-- From overview screen, click "Members" sidebar link
-- Shell remains visible; main content updates in place
-- URL changes; no full-page reload
-
-**User journey 3: Backend unavailable, health indicator shows red**
-- Stop backend service while app is loaded
-- Health badge changes to red (✗) or disappears (per component design)
-- App remains usable; error doesn't crash the page
-
-(Journeys 1–2 are required for acceptance; Journey 3 is optional spike/documentation only.)
-
----
+**Main user journey:**
+1. Load app → navigate to Members via sidebar link
+2. See Active, Deactivated, All tabs; Active tab displays team roster
+3. Click "Add Member" → navigate to `/members/add` with form
+4. Fill form (first name: "Alice", last name: "Smith", seniority: "Senior")
+5. Click Save → redirected to `/members` list; "Alice Smith" appears in Active tab
+6. Click Edit on Alice → form prefilled; change seniority to "Lead"; save
+7. Verify change persists (edit again to confirm, or refresh page)
+8. Click Deactivate → confirm dialog → Alice moves to Deactivated tab
+9. Switch to Deactivated tab → see Alice; click Reactivate → Alice returns to Active tab
+10. No full-page reloads; shell remains constant throughout
 
 ## Out Of Scope
 
-- **Monthly Input Screen, Members Screen, or any other feature screen** — only the shell and health indicator; content placeholder in main area is OK.
-- **Form submission or API integration for data entry** — health check is the only API call this increment makes; other API endpoints are not wired to the UI yet.
-- **Authentication or authorization** — assume single-user, trusted environment (per CONSTITUTION).
-- **Offline mode or service workers** — keep it simple; app requires connectivity.
-- **Performance optimization** — use defaults; optimize after behavior is verified.
-- **Branding or custom styling** — stick to Bulma defaults and the patterns in `docs/ui.md`; custom CSS deferred.
-- **Accessibility audit beyond WCAG 2.1 AA basics** — keyboard nav, semantic HTML, focus outlines; full audit deferred.
-
----
+- Member search or filtering (beyond tab status) — filter by name/ID is future work
+- Bulk operations (add/remove multiple members at once)
+- Import/export member CSV
+- Member profile pages or detailed history view (that is Screen C: Member Detail)
+- Changing member ID or history reassignment logic (see roadmap open questions on duplicate names)
+- Accessibility audit beyond WCAG 2.1 AA semantic HTML (keyboard nav, ARIA labels inline with the shell; detailed audit is a separate increment)
 
 ## Constitution Constraints
 
-- **Small, focused changes** — this increment is one scope (shell + health); no feature screens.
-- **Behavior first** — component tests for shell and health indicator; acceptance tests for end-to-end shell persistence and health check.
-- **Presentation and API are separate** — frontend is a pure SPA consuming JSON; backend exposes API only.
-- **Service is the API contract** — all backend behavior is JSON endpoints; SPA consumes them.
-- **No gold-plating** — build what this increment requires; defer animations, advanced layout, custom CSS.
-- **Human review always** — health indicator is purely informational (green/red badge); never a decision point.
-- **Dependency direction** — frontend depends on backend JSON; zero knowledge of backend internals.
-
----
+- **Behavior first:** Form validation and submission logic tested in Vitest before form components render
+- **Service is the API contract:** Vue components call only `GET /api/members`, `POST /api/members`, `PATCH /api/members/{id}`, `DELETE /api/members/{id}` — zero direct store queries or coordinator imports
+- **Presentation and API separate:** All business logic (member CRUD) lives in backend; Vue components are thin renderers of the API response
+- **Testing strategy:** Vitest + Vue Test Utils for component logic (no browser); one Playwright test for the main user flow (with browser, against running docker-compose)
+- **Small, focused changes:** This increment is the Members screen only; Monthly Input, Alerts, Overview, etc. are separate future increments
 
 ## Roadmap Entry
 
-**Feature name:** Frontend Bootstrapping (Vue 3 + Vite SPA with Bulma Shell and Health Indicator)
+**Feature:** Frontend Increment 2: Members Screen (Vue)
 
-**Job story:** When I load the web app in my browser, I want to see a working Vue 3 SPA with a persistent Bulma shell, a green/red health indicator confirming backend connectivity, and client-side routes that preserve the shell as I navigate, so that I have a professional, polished foundation to build screens on and confidence the backend is accessible.
+**Status:** Partial (entering In Progress)
 
-**Move from:** Planned (section "Frontend Bootstrap: Bulma Shell + Health Indicator")
+**Job Story:** When I open the Members screen in the SPA, I want to view, add, edit, and manage the status of team members with a responsive form interface, so that I can keep the team roster current and control which members appear in scoring and alerts.
 
-**Move to:** Partial (this increment)
+**Acceptance criteria:** All 10 criteria listed above.
+
+**Evidence:** (to be added upon completion)
+- Vitest test count and file locations
+- Playwright test location and results
+- Commit hashes
+- `npm test` and `go test -race ./...` passing
 
 ---
 
 ## Next Action
 
-User approval of this increment definition. On approval:
-1. Create branch `increment/frontend-bootstrap` and switch to it.
-2. Load `4dc-plan` skill to write `.agent/plan.md` with ordered, verifiable technical execution plan.
+User approval needed on:
+1. Branch name: `increment/members-screen-vue`
+2. Acceptance criteria (10 binary, verifiable conditions)
+3. Scope boundaries (out-of-scope list)
 
+Once approved, the next step is `4dc-plan` to convert this intent into a detailed technical execution plan with file-level detail.

@@ -1,620 +1,669 @@
-# Plan: Frontend Bootstrapping
+# Plan: Members Screen (Vue 3)
 
 ## Goal
 
-Bootstrap a Vue 3 + Vite SPA with a persistent app shell, health check indicator, and clean JSON-API-only backend; delete all HTML rendering from the Go server.
+Build the Members screen in Vue 3 with full CRUD operations (list, add, edit, deactivate, reactivate) against the existing Members API, achieving parity with the prior Fyne desktop screen.
 
 ## Branch
 
-`increment/frontend-bootstrap`
+`increment/members-screen-vue`
 
 ## Approach
 
-This increment scaffolds the full Vue 3 + Vite project (adding Pinia, Vue Router, Vitest, Vue Test Utils, Playwright configuration), replaces the Go template shell with a Vue AppShell component, wires the SPA build output into the Go binary via `embed.FS`, and strips all HTML rendering from the backend (templates deleted, handlers removed). The backend becomes purely JSON-API, and the SPA becomes the UI.
-
-Key architectural boundary: Frontend (Vue SPA) consumes only JSON from backend (`/api/*`); backend has zero knowledge of how the SPA renders responses.
-
-Performance-sensitive path: The health check runs once on app load; subsequent navigations do not hit `/api/health` (no performance regression).
+The Members screen is composed of three Views connected by Vue Router (`/members`, `/members/add`, `/members/:id/edit`) and one Pinia store managing member list state, filters, and error handling. All CRUD operations delegate to the existing JSON API (`/api/members`). Components are tested in isolation with Vitest + Vue Test Utils (no browser); one Playwright acceptance test verifies the happy-path end-to-end flow (add a member, observe it in the list). The shell (sidebar, topbar) remains visible and functional during all navigation — this is guaranteed by Vue Router's persistent `AppShell` layout component wrapping the routed screens.
 
 ## Design
 
 ### Data Models
 
-No new domain models. The health check response shape is extended:
+**Vue State (Pinia Store: `useMembersStore`)**
+```
+MembersState {
+  members: MemberDTO[]           // List of members returned from API
+  loading: boolean               // True while any API call is in-flight
+  error: string | null          // Last error message; cleared on successful operation
+  currentTab: 'active' | 'deactivated' | 'all'  // Selected filter tab
+  
+  // Members in current tab (computed from members + currentTab)
+  filteredMembers: MemberDTO[]
+}
 
-**Backend response: `/api/health`** (currently unchanged)
-```json
+MemberDTO (from API response)
 {
-  "status": "ok"
+  id: string                    // UUID (opaque internal ID; used only for routing/API calls)
+  firstName: string             // Non-empty; displayed in UI
+  lastName: string              // Non-empty; displayed in UI
+  fullName: string              // Computed: `${firstName} ${lastName}`; displayed in table/forms
+  seniority: string             // 'Junior' | 'Mid' | 'Senior' | 'Lead'
+  status: string                // 'active' | 'deactivated'
+  createdAt: string             // RFC3339 timestamp
 }
 ```
 
-**Frontend state: `HealthStore` (Pinia)**
-```typescript
-{
-  status: "healthy" | "unhealthy" | "checking"  // state machine
-  lastCheckedAt: number                         // Unix milliseconds
-  checkError: string | null                    // error message if unhealthy
-}
+**Form State (Component-local)**
 ```
-
-**Frontend component prop: `HealthIndicator.vue`**
-```typescript
-{
-  status: "healthy" | "unhealthy" | "checking"  // passed from parent or store
+AddEditFormState {
+  form: {
+    firstName: string           // Input field value
+    lastName: string            // Input field value
+    seniority: string           // Dropdown selection
+  }
+  isSubmitting: boolean         // True while POST/PATCH is in-flight
+  fieldErrors: {                // Per-field validation errors
+    firstName?: string
+    lastName?: string
+    seniority?: string
+  }
 }
 ```
 
 ### Call / Data Flow
 
-1. **App Load:** `main.ts` boots Vue app with Router, Pinia, AppShell layout
-2. **AppShell mounts:** `AppShell.vue` mounted hook calls `HealthStore.checkHealth()`
-3. **Health Check:** `HealthStore.checkHealth()` → `GET /api/health` (via API client)
-4. **Response:** Backend returns `{status: "ok"}` with HTTP 200
-5. **UI Update:** HealthStore updates `status` to "healthy"; `HealthIndicator.vue` re-renders (green checkmark ✓)
-6. **Route Navigation:** User navigates via sidebar link → Vue Router updates route → `AppShell` stays mounted (shell persists) → main content area updates
-7. **No re-check:** Subsequent navigations do not call `/api/health` again (no performance overhead)
-8. **Error path:** If `GET /api/health` fails → HealthStore catches error → `status` = "unhealthy"; HealthIndicator shows red ✗
+**List Members (GET /api/members)**
+1. User navigates to `/members` or clicks Members tab
+2. `MemberListView.vue` mounts → `useMembersStore().loadMembers(tab)`
+3. Store dispatches `setLoading(true)`, `setError(null)`
+4. Fetch `GET http://backend:8080/api/members?status=<active|deactivated|all>` via `api/client.ts`
+5. Parse JSON response → `{ members: MemberDTO[] }`
+6. Store updates: `members = response.members`, `loading = false`
+7. Component re-renders list with current tab filter
+8. On error: store updates `error = 'Failed to load members'`, `loading = false`; component displays error toast
+
+**Add Member (POST /api/members)**
+1. User clicks "Add Member" button → navigate to `/members/add`
+2. `AddMemberForm.vue` mounts with empty form
+3. User fills firstName, lastName, seniority dropdown and clicks Save
+4. Form validation runs (all fields required, seniority in allowed values)
+5. If valid: dispatch `store.addMember(formData)`
+6. Store: `setLoading(true)`, `setError(null)`, fetch `POST /api/members` with `{ firstName, lastName, seniority }`
+7. Server returns `201 Created` with `{ id, firstName, lastName, seniority, status: "active", createdAt }`
+8. Store: push new member to `members` array, `loading = false`
+9. Component: programmatic navigate to `/members` (router.push)
+10. `MemberListView.vue` rerenders with new member in Active tab
+11. On error: store updates `error`, form remains visible, user can retry
+
+**Edit Member (PATCH /api/members/{id})**
+1. User clicks Edit on a member row → navigate to `/members/{id}/edit`
+2. `EditMemberForm.vue` mounts → fetches member by ID from store (pre-loaded in list)
+3. Form pre-fills with existing firstName, lastName, seniority
+4. User modifies one or more fields and clicks Save
+5. Form validation runs
+6. If valid: dispatch `store.editMember(id, formData)`
+7. Store: `setLoading(true)`, fetch `PATCH /api/members/{id}` with `{ firstName, lastName, seniority }`
+8. Server returns `200 OK` with updated member
+9. Store: find and update member in `members` array
+10. Component: navigate to `/members`
+11. List re-renders with updated data
+
+**Deactivate Member (DELETE /api/members/{id})**
+1. User clicks Deactivate on an Active member row
+2. Component shows confirm dialog: "Are you sure?"
+3. User confirms → dispatch `store.deactivateMember(id)`
+4. Store: `setLoading(true)`, fetch `DELETE /api/members/{id}` (no body)
+5. Server returns `204 No Content`
+6. Store: update member status to 'deactivated' in `members` array
+7. Component: re-render without full page reload; member moves from Active to Deactivated tab
+8. On error: display error toast, member remains in Active tab
+
+**Reactivate Member (PATCH /api/members/{id}/reactivate)**
+1. User clicks Reactivate on a Deactivated member row
+2. Component shows confirm dialog (optional; could be immediate)
+3. Dispatch `store.reactivateMember(id)`
+4. Store: `setLoading(true)`, fetch `PATCH /api/members/{id}/reactivate` (no body)
+5. Server returns `200 OK` with updated member (status: 'active')
+6. Store: update member status to 'active' in `members` array
+7. Component: re-render; member moves from Deactivated to Active tab
+8. On error (e.g., 409 Conflict if already active): display error toast
 
 ### Error / Edge-case Inventory
 
 | Condition | Expected response | Covered by subtask |
-|-----------|-------------------|-------------------|
-| Network unreachable on app load | Health check fails silently; badge shows red; app still loads and is usable | Subtask 7 (health check error handling) |
-| Backend `/api/health` returns non-200 | Treat as unhealthy; badge shows red | Subtask 7 (health check error handling) |
-| Health check request times out (>5s) | Abort request; treat as unhealthy; badge shows red | Subtask 7 (API client timeout config) |
-| User navigates before health check completes | Health badge may show "checking" state (spinner) briefly; safe to navigate | Subtask 7 (HealthIndicator component) |
-| Multiple simultaneous navigations (fast clicks) | Vue Router prevents race conditions; shell stays mounted; only one route active at a time | Subtask 4 (Vue Router config) |
-| Page refresh / F5 | App re-boots; health check runs again; shell re-renders | Subtask 1 (main.ts bootstrap) |
-
-**Gaps:** None identified; all conditions covered.
+|-----------|-------------------|--------------------|
+| Network timeout (5s) on any API call | Display error toast, preserve form state if add/edit | Subtask 2, 3, 4 (client-level timeout; API has no control) |
+| API returns 400 (validation error) | Extract error message from JSON, display in toast | Subtask 2, 3, 4 (error response parsing) |
+| API returns 500 | Display generic "Server error" message, log to console | Subtask 2, 3, 4 (error handling) |
+| User navigates away during in-flight request | Request completes in background; store state updates correctly; UI reflects latest state on return | Vitest (component cleanup) |
+| Add/edit form with empty firstName or lastName | Form validation prevents submit; inline error displayed | Subtask 1 (form validation) |
+| Add/edit form with invalid seniority | Form validation prevents submit; inline error displayed | Subtask 1 (form validation) |
+| Attempt to reactivate an already-active member | API returns 409 Conflict; component displays error | Subtask 4 (conditional error handling) |
+| Member deactivated while user is editing | Store state unchanged until next refresh; edit still succeeds (PATCH overwrites regardless of status) | N/A (concurrent edit is a future concern; not addressed in v1) |
+| Member list is empty | "No members" message displayed for each tab | Subtask 1 (empty state) |
 
 ### Observability Intent
 
 | Event | Level | Data |
 |-------|-------|------|
-| `app.boot` | info | `timestamp`, environment (dev/production) |
-| `health.check_started` | debug | `timestamp`, target URL |
-| `health.check_success` | debug | `latency_ms`, `status_code` |
-| `health.check_failed` | warn | `error_message`, `latency_ms`, `target_url` |
-| `route.navigate` | debug | `from_path`, `to_path`, `latency_ms` |
+| `members.api.list_requested` | debug | `status` (active/deactivated/all), timestamp |
+| `members.api.list_success` | info | `count`, `status`, latency_ms |
+| `members.api.list_failed` | warn | `status`, error_message, latency_ms |
+| `members.api.add_requested` | debug | firstName, lastName, seniority (no PII concern in this tool) |
+| `members.api.add_success` | info | new_member_id, latency_ms |
+| `members.api.add_failed` | warn | error_message, latency_ms |
+| `members.api.edit_requested` | debug | member_id, changed_fields |
+| `members.api.edit_success` | info | member_id, latency_ms |
+| `members.api.deactivate_requested` | debug | member_id |
+| `members.api.deactivate_success` | info | member_id, latency_ms |
+| `members.api.reactivate_requested` | debug | member_id |
+| `members.api.reactivate_success` | info | member_id, latency_ms |
 
-Console logging only (no external telemetry). Use `console.debug`, `console.warn`. Disable in production via `import.meta.env.PROD` checks or `vue.config` logging level.
+**Implementation note:** Console logging in dev mode only (guarded by `!import.meta.env.PROD`). No external analytics or telemetry (per CONSTITUTION.md).
 
 ### Architecture Delta
 
-**Before:**
-- Backend serves Go HTML template at `/` (layout.html)
-- Frontend is incomplete Vue scaffold (no router, no pinia)
-- HTML templates in `server/templates/`
-- Backend has knowledge of shell layout, navigation, styling
+**No new containers.** `useMembersStore` is a new Pinia store inside the existing Frontend container. API routes are wired in the existing `server/server.go` (already present); no changes to backend architecture. Vue Router gains three new routes (`/members`, `/members/add`, `/members/:id/edit`); existing routes (`/`, `/alerts`, `/reports`) unchanged. AppShell remains the persistent layout wrapper; Members screen components render within the main content area via `<RouterView />`.
 
-**After:**
-- Backend serves SPA static files at `/` and `/` redirects to `/index.html` (SPA bootstrap)
-- Backend has zero HTML; only JSON API endpoints (`/api/*`)
-- Frontend Vue 3 app owns shell layout, navigation, styling (AppShell component)
-- Frontend calls backend via `/api/health`, `/api/members`, etc. exclusively
-- `server/templates/` deleted; `embed.FS` now points to `services/frontend/dist/` only
-
-**Container view:** No new containers. Frontend and backend containers unchanged; their internal structure and communication patterns change.
-
----
+**Container diagram update not needed** — this is a feature within an existing frontend container, not a new service.
 
 ## Files
 
 | File | Role | Notes |
 |------|------|-------|
-| `services/frontend/package.json` | modify | add Pinia, Vue Router, Vitest, Vue Test Utils, Playwright, @types/node |
-| `services/frontend/vite.config.js` | modify | ensure `build.outDir` = `dist`, `build.emptyOutDir` = true |
-| `services/frontend/vitest.config.js` | new | config for Vitest (test runner for Vue components) |
-| `services/frontend/playwright.config.js` | new | config for Playwright acceptance tests |
-| `services/frontend/tsconfig.json` | new | TypeScript config for Vue 3 + Vite project |
-| `services/frontend/src/main.ts` | new | Vue app entry point; boots router, pinia, app shell |
-| `services/frontend/src/App.vue` | modify | simplify; delegate to router with layout outlet |
-| `services/frontend/src/components/AppShell.vue` | new | persistent shell layout (sidebar, topbar, footer, health indicator, router outlet) |
-| `services/frontend/src/components/HealthIndicator.vue` | new | health badge component (green ✓ / red ✗ / spinner) |
-| `services/frontend/src/stores/health.ts` | new | Pinia store for health check state and logic |
-| `services/frontend/src/stores/index.ts` | new | Pinia store barrel export |
-| `services/frontend/src/api/client.ts` | new | API client for `/api/health` and future endpoints |
-| `services/frontend/src/router.ts` | new | Vue Router config; layout-outlet pattern |
-| `services/frontend/src/views/Home.vue` | new | placeholder home screen (empty content area) |
-| `services/frontend/src/__tests__/components/HealthIndicator.spec.ts` | new | Vitest tests for HealthIndicator (healthy, unhealthy, checking states) |
-| `services/frontend/src/__tests__/stores/health.spec.ts` | new | Vitest tests for HealthStore (check success, check failure, timeout) |
-| `services/backend/server/server.go` | modify | change root handler to serve `index.html`; remove template parsing; wire `/` and `/*` to SPA |
-| `services/backend/server/server_test.go` | modify | remove HTML template tests; update assertion for SPA bootstrap (index.html served) |
-| `services/backend/server/templates/` | delete | entire directory (layout.html, components/, members/) — superseded by Vue |
-| `services/backend/server/handler_members.go` | modify | remove HTML-rendering handlers (`HandlerGetMembersPage`, `HandlerGetAddMemberPage`, `HandlerPostAddMember`, `HandlerGetEditMemberPage`); keep only JSON API handlers |
-| `services/backend/server/handler_members_test.go` | modify | remove HTML handler tests; keep JSON API tests |
-| `services/backend/main.go` | touch | no change required; re-wire not needed (Go binary embed.FS updated in server.go) |
-| `docs/architecture.md` | modify | update container diagram to show Vue SPA instead of templates; update frontend responsibility section to mention AppShell, Vue Router, Pinia |
-| `docs/ui.md` | touch | reference for shell design patterns (responsive, accessibility) |
-| `docs/adr/ADR-20260917-vue-spa-frontend.md` | touch | rationale for this decision; already written but verify it's current |
-
----
+| `services/frontend/src/stores/members.ts` | new | Pinia store: list, add, edit, deactivate, reactivate; API client methods |
+| `services/frontend/src/api/members.ts` | new | Members API client: CRUD methods (fetchMembers, addMember, editMember, deactivateMember, reactivateMember) |
+| `services/frontend/src/views/Members.vue` | modify | Replace placeholder with functional Members list view (tabs, table, actions) |
+| `services/frontend/src/views/AddMemberView.vue` | new | Form for adding a new member |
+| `services/frontend/src/views/EditMemberView.vue` | new | Form for editing an existing member |
+| `services/frontend/src/components/MemberList.vue` | new | Table component: render member rows with Edit/Deactivate/Reactivate buttons |
+| `services/frontend/src/components/MemberForm.vue` | new | Shared form component (add/edit) with validation |
+| `services/frontend/src/components/MemberTabs.vue` | new | Tab selector (Active/Deactivated/All) |
+| `services/frontend/src/components/ErrorToast.vue` | new | Toast notification for API errors |
+| `services/frontend/src/components/ConfirmDialog.vue` | new | Reusable confirm dialog for deactivate/reactivate actions |
+| `services/frontend/src/router.ts` | modify | Add routes for `/members`, `/members/add`, `/members/:id/edit` |
+| `services/frontend/src/stores/index.ts` | modify | Export `useMembersStore` |
+| `services/frontend/src/stores/__tests__/members.spec.ts` | new | Vitest tests for `useMembersStore` (list, add, edit, deactivate, reactivate) |
+| `services/frontend/src/components/__tests__/MemberList.spec.ts` | new | Vitest tests for MemberList component rendering and interactions |
+| `services/frontend/src/components/__tests__/MemberForm.spec.ts` | new | Vitest tests for MemberForm validation and submission |
+| `services/frontend/src/components/__tests__/MemberTabs.spec.ts` | new | Vitest tests for tab switching |
+| `services/frontend/src/components/__tests__/ErrorToast.spec.ts` | new | Vitest tests for error display |
+| `acceptance-tests/tests/members-crud.spec.ts` | new | Playwright test: add a member, verify in list, edit, verify, deactivate, verify |
+| `docs/ui.md` | touch | Reference — member management UI patterns already documented in prior shell work |
 
 ## Subtasks
 
-### 1. [tidy] Upgrade frontend `package.json` and add build config
+### 1. [tidy] Create Members Pinia store with state shape and computed filter
+
+**Description:** Create the `useMembersStore()` store with reactive state for the member list, current tab filter, loading state, and error message. Add a computed property that filters members by the current tab. No API calls yet; this is structure only.
 
 **Files:**
-- `services/frontend/package.json`
-- `services/frontend/vite.config.js`
-- `services/frontend/vitest.config.js` (new)
-- `services/frontend/playwright.config.js` (new)
-- `services/frontend/tsconfig.json` (new)
+- `services/frontend/src/stores/members.ts` (new)
+- `services/frontend/src/stores/index.ts` (modify — export store)
 
 **References:**
-- Current `package.json`: see it has Vue 3, Vite, but missing router/pinia
-- `docs/testing.md` — test strategy and commands
-- `docs/constitution.md#testing-strategy` — testing pyramid
+- `services/frontend/src/stores/health.ts` (pattern: Pinia store composition API, ref/computed)
+- `docs/architecture.md#containers` (frontend state management strategy)
 
-**Description:**
-Add Pinia, Vue Router, Vitest, Vue Test Utils, Playwright to `package.json`. Create Vitest config (test environment: happy-dom, globals: true). Create Playwright config (baseURL: http://localhost:3000). Create TypeScript config for Vue 3 + Vite. Update `vite.config.js` to ensure `build.outDir` = `dist/`, `build.emptyOutDir` = true.
-
-**Verification:** `npm install` succeeds; `npm run build` produces `dist/` directory; `npm test` runs (empty suite OK); `npx playwright --version` returns version.
+**Verification:** `npm test -- stores/members` → store loads without errors; initial state is correct; `filteredMembers` computed property returns empty array initially
 
 **Depends on:** —
 
-**Acceptance criteria:** AC-1 (Vue Project Scaffold), AC-8 (Tests Pass)
+**Acceptance criteria covered:** AC-1 (foundation for filtering tabs)
 
 ---
 
-### 2. [tidy] Create Vue app entry point and router config
+### 2. [tidy] Create Members API client module with fetch methods
+
+**Description:** Extract CRUD methods from implicit calls to a dedicated `api/members.ts` module. Implement `fetchMembers(status)`, `addMember(data)`, `editMember(uuid, data)`, `deactivateMember(uuid)`, `reactivateMember(uuid)` functions. Each method calls the appropriate backend endpoint with proper error handling (HTTP status checks, JSON parse, timeout). Does not call store; pure functions.
 
 **Files:**
-- `services/frontend/src/main.ts` (new)
-- `services/frontend/src/router.ts` (new)
-- `services/frontend/index.html` (modify — ensure entry is `src/main.ts`)
+- `services/frontend/src/api/members.ts` (new)
 
 **References:**
-- Vue 3 docs: https://vuejs.org (entry point pattern)
-- Vue Router docs: https://router.vuejs.org (layout outlet pattern)
-- Current `index.html`: check for existing script tag pointing to `main.js`
+- `services/frontend/src/api/client.ts` (pattern: fetch helpers, error handling, timeout)
+- `services/backend/server/handler_members.go:44-339` (API contract: request/response shapes)
 
-**Description:**
-Create `main.ts` that imports Vue, router, pinia, AppShell; creates Vue app; mounts to `#app`. Create `router.ts` with Vue Router config: define routes (Home, placeholder screens); use layout-outlet pattern (AppShell wraps all routes; main content area is `<router-outlet />`). Update `index.html` to reference `src/main.ts`.
+**Verification:** `npm test -- api/members` → all functions callable; fetch operations parse JSON correctly; errors throw with descriptive messages
 
-**Verification:** `npm run build` succeeds; `npm run preview` boots SPA locally; navigate to `http://localhost:4173` (or configured dev port), shell renders, navigation links exist.
+**Depends on:** —
 
-**Depends on:** 1
-
-**Acceptance criteria:** AC-2 (Persistent Shell), AC-3 (Vue Router Setup)
+**Acceptance criteria covered:** AC-1, AC-2, AC-3, AC-4, AC-5 (foundation for all CRUD)
 
 ---
 
-### 3. [tidy] Create Pinia health check store
+### 3. [tidy] Create MemberForm component with validation logic
+
+**Description:** Build a shared `MemberForm.vue` component that accepts optional `initialData` prop (for edit mode) and emits a `submit` event with form data. Implement validation: firstName and lastName must be non-empty; seniority must be one of the allowed values ('Junior', 'Mid', 'Senior', 'Lead'). Display inline error messages for each field. Submit button is disabled until form is valid.
 
 **Files:**
-- `services/frontend/src/stores/health.ts` (new)
-- `services/frontend/src/stores/index.ts` (new)
-- `services/frontend/src/api/client.ts` (new)
+- `services/frontend/src/components/MemberForm.vue` (new)
+- `services/frontend/src/components/__tests__/MemberForm.spec.ts` (new)
 
 **References:**
-- Pinia docs: https://pinia.vuejs.org (state, actions, getters pattern)
-- Current backend `/api/health` — see `services/backend/server/server.go:99–103`
-- Architecture: SPA should call `/api/health` via exported client function
+- `services/frontend/src/views/Home.vue` (pattern: component structure, styling)
+- `docs/ui.md` (form styling, button patterns, accessibility)
 
-**Description:**
-Create `api/client.ts` with `fetchHealth()` function: makes `GET /api/health` request, returns `{status: "ok"}` or throws error on non-200. Create `stores/health.ts` with Pinia store: state (status: "healthy" | "unhealthy" | "checking", lastCheckedAt, checkError), action `checkHealth()` (calls `fetchHealth()`, updates state, catches errors), getters (isHealthy, statusText). Create `stores/index.ts` barrel.
+**Tests:**
+- id: form-render
+  file: `services/frontend/src/components/__tests__/MemberForm.spec.ts`
+  name: `renders form fields with labels`
+  state: pending
+- id: form-empty-validation
+  file: `services/frontend/src/components/__tests__/MemberForm.spec.ts`
+  name: `disables submit when firstName or lastName is empty`
+  state: pending
+- id: form-invalid-seniority
+  file: `services/frontend/src/components/__tests__/MemberForm.spec.ts`
+  name: `shows error when seniority is not in allowed values`
+  state: pending
+- id: form-valid-submit
+  file: `services/frontend/src/components/__tests__/MemberForm.spec.ts`
+  name: `emits submit event with form data when valid and user clicks Save`
+  state: pending
+- id: form-pre-fill
+  file: `services/frontend/src/components/__tests__/MemberForm.spec.ts`
+  name: `pre-fills form fields from initialData prop`
+  state: pending
 
-**Verification:** `npm test -- health.spec.ts` runs (will be empty until subtask 8 adds tests).
+**active_test:** form-render
 
-**Depends on:** 1
+**Verification:** `npm test -- MemberForm` → all 5 tests pass; form renders, validation blocks submit, submit event fires with correct payload
 
-**Acceptance criteria:** AC-4 (Health Endpoint), AC-5 (Health Indicator Component)
+**Depends on:** —
+
+**Acceptance criteria covered:** AC-2 (add form), AC-3 (edit form), AC-6 (validation)
 
 ---
 
-### 4. [tidy] Create AppShell component with router outlet
+### 4. [behavior] Store actions: loadMembers, addMember, editMember, deactivateMember, reactivateMember
+
+**Description:** Implement async actions in `useMembersStore()` that call the Members API client methods and update store state. Each action sets `loading = true`, clears `error`, calls the API, and on success updates the members list or individual member. On error, sets `error` and leaves `loading = false`. Use optional console logging (dev mode only) for debugging.
 
 **Files:**
-- `services/frontend/src/components/AppShell.vue` (new)
-- `services/frontend/src/views/Home.vue` (new)
+- `services/frontend/src/stores/members.ts` (modify)
+- `services/frontend/src/stores/__tests__/members.spec.ts` (new)
 
 **References:**
-- Bulma docs: https://bulma.io (CSS classes)
-- `docs/ui.md` — shell design patterns (sidebar, topbar, footer, responsive, a11y)
-- `docs/architecture.md#containers` — container view showing AppShell in frontend
+- `services/frontend/src/api/members.ts` (API client methods)
+- `services/frontend/src/stores/health.ts:16-43` (pattern: async action with error handling)
 
-**Description:**
-Create `AppShell.vue`: renders persistent sidebar, topbar, main content area, footer. Includes `<router-outlet />` for screen content. Sidebar has logo, navigation links (Home, Members, etc.), collapsible sections, footer button. Topbar has hamburger toggle, centered search (placeholder), quick action buttons. Footer has health indicator badge. Responsive: sidebar fixed on desktop (≥1024px), overlay/hamburger on mobile. Keyboard-accessible: semantic HTML, ARIA labels, focus outlines (2px #3273dc per `docs/ui.md`).
+**Tests:**
+- id: load-members-success
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `loadMembers updates state with members and sets status to active tab`
+  state: pending
+- id: load-members-error
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `loadMembers sets error message on API failure`
+  state: pending
+- id: add-member-success
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `addMember appends new member to list and returns ID`
+  state: pending
+- id: add-member-error
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `addMember sets error message without modifying list`
+  state: pending
+- id: edit-member-success
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `editMember updates existing member in list`
+  state: pending
+- id: deactivate-member-success
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `deactivateMember updates member status to deactivated`
+  state: pending
+- id: reactivate-member-success
+  file: `services/frontend/src/stores/__tests__/members.spec.ts`
+  name: `reactivateMember updates member status to active`
+  state: pending
 
-Create `Home.vue` as content placeholder.
+**active_test:** load-members-success
 
-**Verification:** `npm run build && npm run preview` → navigate to home page → shell renders with all 3 regions (topbar, sidebar, main) visible; shell persists on mobile (sidebar toggles); focus outlines visible when tabbing.
+**Verification:** `npm test -- stores/members` → all 7 tests pass; store state updates correctly after each action; errors are captured and logged
 
-**Depends on:** 2, 3
+**Depends on:** Subtask 1 (state shape), Subtask 2 (API client)
 
-**Acceptance criteria:** AC-2 (Persistent Shell), AC-10 (Responsive Design)
+**Acceptance criteria covered:** AC-1, AC-2, AC-3, AC-4, AC-5, AC-7
 
 ---
 
-### 5. [tidy] Create HealthIndicator component
+### 5. [tidy] Create MemberList, MemberTabs, ErrorToast, ConfirmDialog components
+
+**Description:** Build four UI components:
+- `MemberList.vue`: Renders a table with member rows (firstName, lastName, seniority, status); each row has Edit, Deactivate, or Reactivate buttons (button choice based on status).
+- `MemberTabs.vue`: Three buttons (Active, Deactivated, All); emits `tab-changed` event when clicked; highlights the current tab.
+- `ErrorToast.vue`: Displays error message in a dismissable toast notification (Bulma alert style).
+- `ConfirmDialog.vue`: Modal confirmation dialog with title, message, Cancel/Confirm buttons; emits `confirmed` event.
 
 **Files:**
-- `services/frontend/src/components/HealthIndicator.vue` (new)
+- `services/frontend/src/components/MemberList.vue` (new)
+- `services/frontend/src/components/MemberTabs.vue` (new)
+- `services/frontend/src/components/ErrorToast.vue` (new)
+- `services/frontend/src/components/ConfirmDialog.vue` (new)
 
 **References:**
-- `services/frontend/src/stores/health.ts` (from subtask 3) — HealthStore state shape
-- `docs/ui.md` — icon conventions, color scheme
-- Bulma: icon tag, color classes
+- `services/frontend/src/components/AppShell.vue` (pattern: responsive layout, Bulma CSS)
+- `docs/ui.md` (styling, button styles, accessibility)
 
-**Description:**
-Create `HealthIndicator.vue`: small badge component (15–20px) showing:
-- Green checkmark ✓ when `status === "healthy"` (title: "Backend OK")
-- Red ✗ when `status === "unhealthy"` (title: "Backend unreachable")
-- Spinner when `status === "checking"` (loading state)
+**Verification:** `npm test` → all components render without errors; props and emitted events work correctly
 
-Component takes optional `status` prop (defaults to reading from HealthStore). Placed in footer (bottom-right corner of AppShell).
+**Depends on:** —
 
-**Verification:** Component renders; no console errors; props/state binding works.
-
-**Depends on:** 3
-
-**Acceptance criteria:** AC-5 (Health Indicator Component)
+**Acceptance criteria covered:** AC-1 (tabs), AC-4 (deactivate), AC-5 (reactivate), AC-6 (validation errors), AC-7 (error handling)
 
 ---
 
-### 6. [tidy] Wire AppShell health check on mount; integrate into Vue app
+### 6. [tidy] Add component unit tests for MemberList, MemberTabs, ErrorToast, ConfirmDialog
+
+**Description:** Write Vitest + Vue Test Utils tests covering:
+- MemberList: renders rows for each member; Edit/Deactivate/Reactivate buttons emit correct events; empty state message
+- MemberTabs: all three tabs render and emit event when clicked; active tab is highlighted
+- ErrorToast: displays error message; dismiss button clears it
+- ConfirmDialog: renders title and message; Cancel and Confirm buttons emit correct events
+
+**Files:**
+- `services/frontend/src/components/__tests__/MemberList.spec.ts` (new)
+- `services/frontend/src/components/__tests__/MemberTabs.spec.ts` (new)
+- `services/frontend/src/components/__tests__/ErrorToast.spec.ts` (new)
+- `services/frontend/src/components/__tests__/ConfirmDialog.spec.ts` (new)
+
+**Verification:** `npm test -- components` → 4 files, ~15 tests, all pass
+
+**Depends on:** Subtask 5 (component creation)
+
+**Acceptance criteria covered:** AC-8 (test coverage)
+
+---
+
+### 7. [behavior] Implement Members list view with tab filtering and loading state
+
+**Description:** Replace the placeholder `Members.vue` view with a functional list screen. Wire `MemberTabs`, `MemberList`, and `ErrorToast` components. On mount, call `store.loadMembers('active')`. When user clicks a tab, call `store.setCurrentTab(tab)` and reload. Display loading spinner while `store.loading` is true. Render error toast when `store.error` is set.
+
+**Files:**
+- `services/frontend/src/views/Members.vue` (modify)
+
+**References:**
+- `services/frontend/src/stores/members.ts` (store actions)
+- `services/frontend/src/components/MemberList.vue` (component prop/event contract)
+- `services/frontend/src/components/MemberTabs.vue` (component prop/event contract)
+
+**Tests:**
+- id: list-load-active
+  file: `services/frontend/src/views/__tests__/Members.spec.ts`
+  name: `loads and displays active members on mount`
+  state: pending
+- id: list-tab-switch
+  file: `services/frontend/src/views/__tests__/Members.spec.ts`
+  name: `switches to deactivated tab and reloads members`
+  state: pending
+- id: list-error
+  file: `services/frontend/src/views/__tests__/Members.spec.ts`
+  name: `displays error toast when store.error is set`
+  state: pending
+
+**active_test:** list-load-active
+
+**Verification:** `npm test -- views/Members` → 3 tests pass; component loads, tabs switch, errors display
+
+**Depends on:** Subtask 1, 4, 5
+
+**Acceptance criteria covered:** AC-1, AC-8
+
+---
+
+### 8. [behavior] Implement AddMemberView and wire to router
+
+**Description:** Create `AddMemberView.vue` that renders the `MemberForm` component in add mode (no initialData). On form submit, call `store.addMember(formData)`. Show loading spinner and disable form while submitting. On success, navigate to `/members`. On error, display error message and allow retry.
+
+**Files:**
+- `services/frontend/src/views/AddMemberView.vue` (new)
+- `services/frontend/src/views/__tests__/AddMemberView.spec.ts` (new)
+- `services/frontend/src/router.ts` (modify — add route)
+
+**References:**
+- `services/frontend/src/router.ts` (route structure)
+- `services/frontend/src/components/MemberForm.vue` (submit event shape)
+
+**Tests:**
+- id: add-form-submit
+  file: `services/frontend/src/views/__tests__/AddMemberView.spec.ts`
+  name: `submits form data to store and navigates to members list on success`
+  state: pending
+- id: add-form-error
+  file: `services/frontend/src/views/__tests__/AddMemberView.spec.ts`
+  name: `displays error and allows retry on API failure`
+  state: pending
+
+**active_test:** add-form-submit
+
+**Verification:** `npm test -- AddMemberView` → 2 tests pass; form submits, navigation works, error handling works
+
+**Depends on:** Subtask 3, 4
+
+**Acceptance criteria covered:** AC-2, AC-6, AC-7, AC-10
+
+---
+
+### 9. [behavior] Implement EditMemberView and wire to router
+
+**Description:** Create `EditMemberView.vue` that routes on `/members/:id/edit`, loads the member data from the store (by matching ID to member in `members` array), pre-fills the form, and on submit calls `store.editMember(id, formData)`. Handle case where member is not found (display error, redirect). Show loading spinner during submission.
+
+**Files:**
+- `services/frontend/src/views/EditMemberView.vue` (new)
+- `services/frontend/src/views/__tests__/EditMemberView.spec.ts` (new)
+- `services/frontend/src/router.ts` (modify — add route with param)
+
+**References:**
+- `services/frontend/src/router.ts:4-25` (route param syntax)
+- `services/frontend/src/views/AddMemberView.vue` (similar form wiring pattern)
+
+**Tests:**
+- id: edit-form-prefill
+  file: `services/frontend/src/views/__tests__/EditMemberView.spec.ts`
+  name: `loads member data and pre-fills form fields`
+  state: pending
+- id: edit-form-submit
+  file: `services/frontend/src/views/__tests__/EditMemberView.spec.ts`
+  name: `submits edited data to store and navigates to members list on success`
+  state: pending
+- id: edit-member-not-found
+  file: `services/frontend/src/views/__tests__/EditMemberView.spec.ts`
+  name: `displays error when member ID is not found in store`
+  state: pending
+
+**active_test:** edit-form-prefill
+
+**Verification:** `npm test -- EditMemberView` → 3 tests pass; form pre-fills, submits, navigation works
+
+**Depends on:** Subtask 3, 4
+
+**Acceptance criteria covered:** AC-3, AC-6, AC-7, AC-10
+
+---
+
+### 10. [behavior] Wire deactivate and reactivate actions in MemberList component
+
+**Description:** Update `MemberList.vue` to emit `deactivate` and `reactivate` events (with member ID) when buttons are clicked. Update the parent `Members.vue` view to listen to these events, show a confirm dialog, and on user confirmation call `store.deactivateMember()` or `store.reactivateMember()`. Show loading spinner during action. Update member row immediately after success (status changes, button options change) without full page reload.
+
+**Files:**
+- `services/frontend/src/components/MemberList.vue` (modify)
+- `services/frontend/src/views/Members.vue` (modify — handle deactivate/reactivate events)
+- `services/frontend/src/components/__tests__/MemberList.spec.ts` (modify — add event tests)
+
+**References:**
+- `services/frontend/src/components/ConfirmDialog.vue` (confirm flow)
+- `services/frontend/src/stores/members.ts` (deactivate/reactivate actions)
+
+**Tests:**
+- id: deactivate-button-emit
+  file: `services/frontend/src/components/__tests__/MemberList.spec.ts`
+  name: `emits deactivate event when Deactivate button clicked`
+  state: pending
+- id: reactivate-button-emit
+  file: `services/frontend/src/components/__tests__/MemberList.spec.ts`
+  name: `emits reactivate event when Reactivate button clicked`
+  state: pending
+- id: deactivate-confirm-action
+  file: `services/frontend/src/views/__tests__/Members.spec.ts`
+  name: `calls store.deactivateMember after user confirms`
+  state: pending
+- id: reactivate-confirm-action
+  file: `services/frontend/src/views/__tests__/Members.spec.ts`
+  name: `calls store.reactivateMember after user confirms`
+  state: pending
+
+**active_test:** deactivate-button-emit
+
+**Verification:** `npm test` → all tests pass; deactivate/reactivate buttons work, confirm dialog flows, members update without reload
+
+**Depends on:** Subtask 5, 7
+
+**Acceptance criteria covered:** AC-4, AC-5, AC-8
+
+---
+
+### 11. [tidy] Add "Add Member" button to AppShell sidebar footer
+
+**Description:** Update the placeholder "Add Item" button in `AppShell.vue` footer to navigate to `/members/add` (RouterLink or programmatic navigation). Button text: "Add Member". Icon: fa-plus (already present). Only show button when user is on `/members` path (optional; or always show and let it navigate from anywhere).
 
 **Files:**
 - `services/frontend/src/components/AppShell.vue` (modify)
-- `services/frontend/src/App.vue` (modify)
 
 **References:**
-- Vue 3 Composition API: onMounted hook
-- `services/frontend/src/stores/health.ts` — HealthStore.checkHealth() action
-- `services/frontend/src/router.ts` — Router export for App.vue to use
+- `services/frontend/src/components/AppShell.vue:114-120` (current button)
 
-**Description:**
-Modify `AppShell.vue` `onMounted()` hook to call `HealthStore.checkHealth()` immediately (async; no await in onMounted). Health check runs once at app load. Modify `App.vue` to render AppShell as layout wrapper; App delegates to router.
+**Verification:** `npm test` → AppShell still renders; "Add Member" button navigates to `/members/add`
 
-**Verification:** `npm run build && npm run preview` → open http://localhost:4173 → browser DevTools Network tab shows one `GET /api/health` request on page load; health badge updates from "checking" to "healthy" (or "unhealthy" if backend not running); subsequent sidebar navigation does not trigger another health check.
+**Depends on:** Subtask 8 (AddMemberView exists)
 
-**Depends on:** 4, 5
-
-**Acceptance criteria:** AC-5 (Health Indicator Component)
+**Acceptance criteria covered:** AC-2 (accessibility to add form)
 
 ---
 
-### 7. [research] Verify SPA routing and embed.FS integration for Go binary
+### 12. [behavior] Write Playwright acceptance test: add member happy path
+
+**Description:** Create `acceptance-tests/tests/members-crud.spec.ts` with one test covering the main user flow:
+1. Navigate to app, wait for shell to load
+2. Click Members in sidebar
+3. Verify Active tab is selected and members list is visible
+4. Click "Add Member" button
+5. Fill form (firstName: "Alice", lastName: "Smith", seniority: "Senior")
+6. Click Save
+7. Verify redirected to /members list
+8. Verify "Alice Smith" appears in Active tab with correct seniority
+9. Click Edit on Alice's row
+10. Verify form pre-filled with correct values
+11. Change seniority to "Lead"
+12. Click Save
+13. Verify "Alice Smith" shows "Lead" in the list
+14. Click Deactivate on Alice's row
+15. Confirm dialog
+16. Verify Alice moves to Deactivated tab
+17. Click Reactivate on Alice
+18. Verify Alice moves back to Active tab
 
 **Files:**
-- `services/backend/server/server.go` (read only)
-- `services/frontend/vite.config.js` (read only)
-- `docs/architecture.md` (read only)
+- `acceptance-tests/tests/members-crud.spec.ts` (new)
 
 **References:**
-- Go `embed.FS` docs: https://pkg.go.dev/embed
-- Vite build output: `dist/` directory structure (index.html, assets/, etc.)
+- `acceptance-tests/` (Playwright setup, existing test structure if any)
+- `docs/testing.md` (acceptance test scope and strategy)
 
-**Description:**
-Spike: verify how Go embed.FS will serve Vue SPA. In particular:
-1. Does `index.html` need to be at root of `dist/`?
-2. How does SPA routing (Vue Router client-side) interact with Go static file serving? (Answer: SPA bootstrap via `index.html` for all non-API routes; Vue Router takes over in browser)
-3. Current Dockerfile build order: `npm run build` → `go build` → does Go binary include `dist/` from frontend build?
+**Verification:** `npm run test:acceptance -- members-crud` → test passes against running docker-compose environment (backend healthy, frontend loaded)
 
-Record findings in implementation.md.
+**Depends on:** Subtask 7, 8, 9, 10 (all UI features complete)
 
-**Verification:** Findings recorded; no blocker for next subtask.
-
-**Depends on:** 2
-
-**Acceptance criteria:** AC-6 (SPA Build Integrated)
+**Acceptance criteria covered:** AC-1, AC-2, AC-3, AC-4, AC-5, AC-9
 
 ---
 
-### 8. [tidy] Update backend server.go to serve SPA; remove template parsing
+### 13. [tidy] Update docs/ui.md: add Members screen section
+
+**Description:** Document the Members screen UI pattern in `docs/ui.md`:
+- Three-tab navigation (Active/Deactivated/All)
+- Table layout with firstName, lastName, seniority, actions columns
+- Form layout for add/edit (fields, validation, error display)
+- Confirm dialogs for deactivate/reactivate
+- Empty state ("No members in this view")
+- Loading spinner state
+- Error toast display
+- Responsive behavior on mobile
 
 **Files:**
-- `services/backend/server/server.go` (modify lines 1–130)
+- `docs/ui.md` (modify)
 
-**References:**
-- Current root handler: line 106–111 (serves template)
-- Embed.FS: line 13–14 (currently points to `dist templates`)
-- Static file serving: line 113–121 (already serves `/dist/`)
-- Go http.FileServer: https://pkg.go.dev/net/http#FileServer
+**Verification:** `docs/ui.md` updated; no build or test required; manual review by team
 
-**Description:**
-1. Change `embed.FS` comment from `dist templates` to just `dist` (or update path logic)
-2. Remove `template.ParseFS()` call (line 93–96)
-3. Remove template execution from root handler (line 106–111)
-4. New root handler: serves `index.html` for all non-API routes (SPA bootstrap pattern); handles `GET /` and `GET /*` by reading `index.html` from embed.FS and writing to `w`
-5. Ensure `GET /api/*` routes are untouched (JSON API handlers remain)
-6. Remove reference to `tmpl` variable (no longer used)
+**Depends on:** Subtask 7, 8, 9, 10 (UI complete)
 
-**Verification:** `go build ./...` succeeds; no unused variable errors. `go test -race ./...` runs (tests updated in next subtask).
-
-**Depends on:** 7
-
-**Acceptance criteria:** AC-6 (SPA Build Integrated), AC-7 (HTML Rendering Removed)
-
----
-
-### 9. [tidy] Remove HTML template files and HTML rendering handlers from backend
-
-**Files:**
-- `services/backend/server/templates/` (delete entire directory)
-- `services/backend/server/handler_members.go` (modify — remove HTML handlers)
-- `services/backend/server/handler_members_test.go` (modify — remove HTML handler tests)
-
-**References:**
-- `services/backend/server/templates/layout.html` — currently embedded
-- `services/backend/server/handler_members.go:68–89` — HTML handlers (HandlerGetMembersPage, HandlerGetAddMemberPage, HandlerPostAddMember, HandlerGetEditMemberPage)
-- `services/backend/server/handler_members_test.go` — tests for those handlers
-
-**Description:**
-1. Delete `services/backend/server/templates/` and all contents
-2. From `handler_members.go`, remove routes:
-   - `GET /members` (HandlerGetMembersPage)
-   - `GET /members/add` (HandlerGetAddMemberPage)
-   - `POST /members` (HandlerPostAddMember)
-   - `GET /members/{id}/edit` (HandlerGetEditMemberPage)
-   - Keep only JSON API routes: `POST /api/members`, `GET /api/members`, `PATCH /api/members/{id}`, `DELETE /api/members/{id}`, `PATCH /api/members/{id}/reactivate`
-3. Remove the handler functions themselves (HandlerGetMembersPage, HandlerGetAddMemberPage, HandlerPostAddMember, HandlerGetEditMemberPage)
-4. From `server.go`, remove HTML handler routing (line 67–89)
-5. From `handler_members_test.go`, remove tests for HTML handlers
-6. Verify no `html/template` imports remain in `server/` package
-
-**Verification:** `grep -r "html/template" services/backend/server/ --include="*.go"` returns nothing (except comments if any). `go build ./...` succeeds. `go test -race ./server/...` runs.
-
-**Depends on:** 8
-
-**Acceptance criteria:** AC-7 (HTML Rendering Removed), AC-8 (Tests Pass)
-
----
-
-### 10. [tidy] Update server_test.go: replace HTML template tests with SPA bootstrap assertions
-
-**Files:**
-- `services/backend/server/server_test.go` (modify)
-
-**References:**
-- Current tests: likely check for template rendering or HTML structure
-- New assertion: GET `/` returns status 200 and includes `index.html` content (e.g., contains `<div id="app">`, `<script>` references)
-
-**Description:**
-Remove or rewrite tests that check for HTML template rendering. Add/update test to verify:
-1. `GET /` returns HTTP 200
-2. Response contains HTML (content-type: text/html)
-3. Response body contains `<div id="app">` (Vue mount point) and script tag referencing `main` or Vue runtime
-
-Verify existing API health check test remains green.
-
-**Verification:** `go test -race ./server/...` passes; all tests green.
-
-**Depends on:** 9
-
-**Acceptance criteria:** AC-8 (Tests Pass), AC-9 (Docker Integration)
-
----
-
-### 11. [tidy] Add Vitest component tests for HealthIndicator and HealthStore
-
-**Files:**
-- `services/frontend/src/__tests__/components/HealthIndicator.spec.ts` (new)
-- `services/frontend/src/__tests__/stores/health.spec.ts` (new)
-
-**References:**
-- Vitest docs: https://vitest.dev
-- Vue Test Utils: https://test-utils.vuejs.org
-- `services/frontend/src/components/HealthIndicator.vue` (component under test)
-- `services/frontend/src/stores/health.ts` (store under test)
-
-**Description:**
-Write component tests for `HealthIndicator.vue`:
-- Test: renders green checkmark when `status === "healthy"`
-- Test: renders red X when `status === "unhealthy"`
-- Test: renders spinner when `status === "checking"`
-
-Write store tests for `HealthStore`:
-- Test: `checkHealth()` sets `status` to "checking", then to "healthy" on success
-- Test: `checkHealth()` sets `status` to "unhealthy" on network error
-- Test: `checkHealth()` sets `checkError` message on error
-
-**Verification:** `npm test` passes; all 6 tests green (or however many written).
-
-**Depends on:** 3, 5
-
-**Acceptance criteria:** AC-8 (Tests Pass)
-
----
-
-### 12. [behavior] Update docs/architecture.md with Vue SPA design
-
-**Files:**
-- `docs/architecture.md` (modify)
-
-**References:**
-- Current architecture diagram (line 8–80): shows "Go html/template" → needs to show "Vue 3 SPA"
-- Current container descriptions (line 85–126): update Frontend responsibility to mention AppShell, Vue Router, Pinia
-- Hexagonal section (line 139–270): no changes needed; backend structure unchanged
-
-**Description:**
-Update container diagram to replace "Go html/template + HTMX" with "Vue 3 + Vite SPA". Update Frontend Service description to explain:
-- AppShell component owns shell layout (sidebar, topbar, footer, responsive, a11y)
-- Vue Router handles client-side navigation (shell persists, no full reload)
-- Pinia stores hold client state (health check, member list, etc.)
-- Health indicator calls `/api/health` once on load
-- All API calls through `/api/*` JSON endpoints
-
-No changes to backend structure or hexagonal architecture (those remain unchanged).
-
-**Verification:** `docs/architecture.md` reads clearly; diagram is accurate; someone new can understand the SPA + API separation.
-
-**Depends on:** 4, 5, 8
-
-**Acceptance criteria:** AC-2 (Persistent Shell), AC-3 (Vue Router Setup), AC-5 (Health Indicator), AC-6 (SPA Build Integrated)
-
----
-
-### 13. [tidy] Update Dockerfile build order for Vue SPA
-
-**Files:**
-- `services/frontend/Dockerfile` (modify)
-
-**References:**
-- Current Dockerfile: likely does `npm install` and `npm run build`
-- Backend Dockerfile: expects `services/frontend/dist/` to exist after frontend build succeeds
-
-**Description:**
-Verify Dockerfile runs `npm install` → `npm run build` → output goes to `dist/`. Ensure build stage completes successfully before final image runs (no npm runtime needed in final image; only static files).
-
-**Verification:** `docker build -f services/frontend/Dockerfile .` succeeds; built image is lean (no Node.js in runtime layer if using multi-stage).
-
-**Depends on:** 2
-
-**Acceptance criteria:** AC-9 (Docker Integration)
-
----
-
-### 14. [tidy] Update backend Dockerfile to embed Vue SPA build output
-
-**Files:**
-- `services/backend/Dockerfile` (modify)
-
-**References:**
-- Build order: must build frontend first → then build backend Go binary with embedded assets
-- Current Go code: `embed.FS` in `server/server.go` points to `dist/` directory
-
-**Description:**
-Update backend Dockerfile (multi-stage):
-1. Stage 1: frontend build (copy `services/frontend/` → run `npm install && npm run build` → output to `dist/`)
-2. Stage 2: Go build (copy all backend code + frontend `dist/` → `go build` → binary includes embedded assets)
-3. Stage 3: runtime (Alpine + binary only)
-
-Ensure Go build can access `services/frontend/dist/` at embed time.
-
-**Verification:** `docker build -f services/backend/Dockerfile .` succeeds; inspect final image size (should include static assets, no Node.js).
-
-**Depends on:** 13
-
-**Acceptance criteria:** AC-9 (Docker Integration)
-
----
-
-### 15. [behavior] Run full docker-compose end-to-end test
-
-**Files:**
-- `docker-compose.yml` (touch — reference for build order)
-- `services/frontend/dist/` (generated artifact from subtask 2)
-- `services/backend/leadpulse` (generated binary)
-
-**References:**
-- `docker-compose.yml`: orchestration of frontend and backend services
-- `CONSTITUTION.md#testing-strategy` — acceptance test gate
-
-**Description:**
-End-to-end verification:
-1. Run `make docker-build` (or `docker-compose build`) → both images build successfully
-2. Run `make docker-up` (or `docker-compose up`) → both services start, health checks pass
-3. Open browser to `http://localhost:3000` (frontend)
-4. Verify shell renders (sidebar, topbar, main content, footer with health indicator)
-5. Verify health indicator is green (✓) if backend is reachable
-6. Click sidebar link → verify shell persists, content updates (no full reload)
-7. Open DevTools Network tab → verify `GET /api/health` appears once on load; no re-request on navigation
-8. Stop backend service (docker-compose down) → refresh page → health indicator turns red (✗)
-
-**Verification:** All 8 steps pass. `docker-compose logs` show no errors. Browser console has no JS errors (except expected development warnings).
-
-**Depends on:** 14
-
-**Acceptance criteria:** AC-1–AC-10 (all acceptance criteria)
+**Acceptance criteria covered:** AC-10 (responsive), AC-6 (validation)
 
 ---
 
 ## Context Map
 
-- `CONSTITUTION.md#engineering-principles` — behavior-first, small focused changes, no gold-plating
-- `CONSTITUTION.md#testing-strategy` — Vitest for component tests, Playwright for acceptance tests
-- `CONSTITUTION.md#performance-envelope` — health check response < 200ms (call once on load, not on nav)
-- `docs/architecture.md#containers` — C4 Level 2 container view (frontend/backend boundary)
-- `docs/architecture.md#hexagonal-architecture` — backend is unchanged; only frontend changes
-- `docs/ui.md` — shell design (sidebar, topbar, footer, responsive, a11y), color scheme, icon conventions
-- `docs/adr/ADR-20260917-vue-spa-frontend.md` — rationale for Vue 3 + Vite choice (current decision record)
-- `docs/adr/ADR-20260916-hexagonal-architecture-member-crud.md` — backend hexagonal pattern (unchanged)
-- `docs/testing.md` — test commands and strategy by layer
-
----
+- `CONSTITUTION.md#testing-strategy` — component tests (Vitest), handler tests skip HTML rendering, acceptance tests narrow scope to one main flow per feature
+- `CONSTITUTION.md#performance-envelope` — screen render < 200ms (verify with dev tools; not an automated gate in v1)
+- `CONSTITUTION.md#delivery-and-documentation` — feature done when acceptance criteria pass and roadmap evidence is linked
+- `docs/architecture.md#containers` — frontend container: Vue 3 SPA, Pinia state, Vue Router, calls `/api/*` endpoints
+- `docs/architecture.md#communication-paths` — Vue → HTTP → backend; JSON contract only
+- `docs/testing.md` — Vitest component tests at unit layer; Playwright acceptance tests at feature layer
+- `docs/ui.md` — existing Bulma framework decisions, button/form/modal patterns (reference, no changes needed unless documenting new patterns)
+- `docs/adr/ADR-20260917-vue-spa-frontend.md` — Vue 3 SPA stack decision and rationale
 
 ## Acceptance Scenarios
 
-These scenarios are advisory; the acceptance criteria gate is the test suite passing + end-to-end Docker verification (subtask 15).
+These scenarios describe user actions that span multiple components and would be difficult to test at the unit level. They are advisory unless marked `required`.
 
-### Scenario 1: App loads and health check passes
+### AS-1: Add and view new member
 
-- **Criterion:** AC-1, AC-2, AC-5, AC-9
-- **User action:** Open browser to `http://localhost:3000`
-- **Precondition:** Docker services healthy; backend running
-- **Expected outcome:** 
-  - Shell renders (sidebar visible on desktop, hamburger on mobile)
-  - Top bar with search and action buttons visible
-  - Main content area (home placeholder) visible
-  - Footer with green health checkmark (✓)
-  - Browser console clean (no errors, only dev warnings)
-- **Evidence:** Manual browser inspection (no automated assertion needed; covered by component tests + docker-compose health checks)
-- **Gate:** advisory
+- criterion: AC-2
+- user action: Click "Add Member", fill form, save
+- precondition: User is on `/members` view
+- expected outcome: New member appears in Active tab immediately after redirect
+- evidence: `acceptance-tests/tests/members-crud.spec.ts`
+- gate: advisory
+- state: planned
 
-### Scenario 2: Navigation persists shell
+### AS-2: Edit and verify persistence
 
-- **Criterion:** AC-2, AC-3
-- **User action:** From home, click "Members" link in sidebar
-- **Precondition:** App loaded; sidebar fully visible (desktop) or toggle expanded (mobile)
-- **Expected outcome:** 
-  - URL changes (e.g., `/` → `/members`)
-  - Shell (sidebar, topbar, footer) remains visible
-  - Main content area updates with new screen (not yet implemented; placeholder OK)
-  - No full page reload (browser tab title does not flash, network tab shows only XHR for data, not HTML)
-- **Evidence:** Manual browser + DevTools inspection (covered by component tests for router)
-- **Gate:** advisory
+- criterion: AC-3
+- user action: Click Edit, change seniority, save
+- precondition: User is on `/members` view with at least one member
+- expected outcome: Changes persist in the list; refresh page shows updated values
+- evidence: `acceptance-tests/tests/members-crud.spec.ts`
+- gate: advisory
+- state: planned
 
-### Scenario 3: Mobile responsiveness
+### AS-3: Deactivate and reactivate member
 
-- **Criterion:** AC-10
-- **User action:** Resize browser to mobile width (≤768px); toggle sidebar with hamburger
-- **Precondition:** App loaded
-- **Expected outcome:** 
-  - Sidebar not visible by default (overlay mode)
-  - Hamburger menu icon visible in topbar
-  - Click hamburger → sidebar slides in from left with semi-transparent overlay
-  - Click overlay or ESC → sidebar closes
-  - Topbar remains sticky at top
-- **Evidence:** Manual browser resize or device emulation (DevTools)
-- **Gate:** advisory
-
----
+- criterion: AC-4, AC-5
+- user action: Click Deactivate, confirm; later click Reactivate, confirm
+- precondition: User is on `/members` view
+- expected outcome: Member moves between tabs without page reload; status reflected in sidebar/overview (future)
+- evidence: `acceptance-tests/tests/members-crud.spec.ts`
+- gate: advisory
+- state: planned
 
 ## Risks
 
-1. **Embed.FS path confusion:** Go `embed.FS` directive must point to correct path. If `services/frontend/dist/` doesn't exist at Go build time, build fails. Mitigation: run `npm run build` before `go build` in Dockerfile; validate in subtask 7.
+1. **Concurrent edit:** If member is edited by another browser tab while user is editing, the update will overwrite without warning. This is out of scope for v1.
+   - Mitigation: Document as known limitation; future increment will add optimistic locking or conflict detection.
 
-2. **SPA routing vs. Go static file serving:** Vue Router client-side navigation can conflict with Go static file handler if misconfigured. For example, if Vue app requests `/members` (client-side route), it must first fetch `index.html` and let Vue Router take over, not serve a 404. Mitigation: root handler must serve `index.html` for all non-API routes (SPA bootstrap pattern). Subtask 8 handles this.
+2. **API timeout on slow networks:** 5-second fetch timeout may be too aggressive. If users are on slow connections, the app may show errors prematurely.
+   - Mitigation: Console logs will surface timeouts in dev mode; manual testing in slow-network conditions recommended before release.
 
-3. **Health check performance:** If health check times out, it could block app bootstrap (bad UX). Mitigation: make health check async and non-blocking; don't wait for it before rendering shell. Subtask 6 ensures this (no await in onMounted).
+3. **Form state reset on navigation:** If user fills form, navigates away, then returns to the form, the form will be empty (form state is component-local, not persistent).
+   - Mitigation: Expected behavior (forms don't auto-save); document in future UX review if needed.
 
-4. **CORS for cross-container calls:** Frontend (port 3000) calls backend (port 8080 inside container, but hostname is `backend:8080`). If nginx proxy not configured correctly, may fail. Mitigation: verify `docker-compose.yml` sets `VITE_API_URL=http://backend:8080` and nginx proxies `/api/*` to backend. Subtask 14 validates.
-
-5. **TypeScript setup complexity:** Adding TypeScript to Vue project introduces new tooling (tsconfig.json, type definitions). If misconfigured, IDE intellisense breaks. Mitigation: use standard Vue 3 + Vite + TypeScript template; test with `npm run build` early (subtask 1).
-
----
+4. **Empty member list handling:** Three tabs with potentially empty arrays. Component must render empty state for each tab.
+   - Mitigation: Subtask 5 and 7 explicitly cover empty state rendering.
 
 ## Planning Decisions
 
 | Decision | Chosen | Rejected | Reason |
 |----------|--------|----------|--------|
-| **When to call health check** | Once on app load (onMounted) | On every navigation or periodically | Simplicity; one API call per session; performance envelope met. Polling can be added later if needed. |
-| **Health indicator state machine** | Three states: "healthy", "unhealthy", "checking" | Two states (healthy/unhealthy only) | Shows loading feedback during the check (better UX). Checking state brief (usually <100ms), so minimal visual clutter. |
-| **Template removal strategy** | Delete all HTML templates; move shell to Vue AppShell | Keep templates and serve side-by-side | Cleaner architecture; no mixed template engines; full separation of concerns (backend JSON only, frontend Vue only). |
-| **SPA build integration** | Go embed.FS includes frontend `dist/` output | Frontend service serves SPA separately (no embedding) | Single-binary distribution (per CONSTITUTION). Embedding is complex but critical for portability. |
-| **Router layout pattern** | AppShell wraps all routes via layout-outlet | Separate layout component for each page | Simpler; single source of truth for shell; shell persists automatically. Reduces boilerplate per screen. |
-| **Pinia for health state** | Yes, use Pinia store | Plain Vue reactive/ref in component | Stores are reusable (other screens may need health); encourages separation of concerns. Slight overhead but pays off as app grows. |
-| **Observability logging** | Console.debug/warn only | External service or no logging | Stateless SPA; no backend telemetry (per CONSTITUTION privacy). Console logs are dev/debug aids; can be disabled in production. |
+| Store library | Pinia | Vuex, Redux | Pinia is lightweight, composition-API-first (modern Vue 3 pattern), and already a dependency (from health store setup) |
+| Form library | Native Vue + validation logic | VeeValidate, Formik | Keep dependencies minimal; form is simple (3 fields, 4 validation rules); native Vue is maintainable |
+| API client location | Dedicated `api/members.ts` module | Inline in store | Separation of concerns; client is testable independently; reusable if CLI client added later |
+| ID display vs. storage | Use UUID as opaque internal ID; display full name in UI | UUID-heavy UI | UUIDs are the contract with backend; no conversion logic; UI friendly to users (shows names, not IDs); routes use UUID (proper REST semantics) |
+| Confirm dialogs | Reusable `ConfirmDialog.vue` component | Browser `confirm()` | Reusable, styled with Bulma, testable; browser confirm is not accessible |
+| Tab navigation | Re-fetch on tab click | Filter client-side | Keeps store single source of truth; ensures server and client agree on what "deactivated" means; no sorting/filtering ambiguity |
+| Error messages | Toast notifications + store error field | Inline validation | Inline is for form validation; toast for API errors (network, 500, etc.) is user-friendly and dismissable |
+| Loading state | Global `store.loading` | Per-action spinners | Simpler; single loading spinner during any CRUD operation; acceptable UX for this tool (not a high-frequency CRUD app) |
+| Router lazy loading | Yes (`() => import(...)`) | Eager imports | Performance: members screen is not needed until user navigates; lazy loading reduces initial bundle size |
+| Component co-location | `views/` for screens, `components/` for reusables | Flat structure | Standard Vue project organization; clear intent; screens render in RouterView, reusables used across multiple screens |
 
 ---
 
 ## Next Action
 
-User approval of this plan. On approval:
-1. Hand off to the implement workflow (orchestrator detects first subtask type and calls appropriate implement skill).
-2. First subtask is `[tidy]` → `4dc-tidy` skill handles it.
-3. Implement skills load only the files named in their subtask's Files field; they do not re-scan the whole codebase.
+On user approval, this plan will be handed off to the implement skill to execute the subtasks in order. The orchestrator will detect the first subtask's type (tidy) and load the appropriate implement skill.

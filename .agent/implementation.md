@@ -1,228 +1,338 @@
-# Implementation: Frontend Bootstrapping
+# Implementation: Members Screen (Vue 3)
 
-status: complete
-branch: increment/frontend-bootstrap
-started: 2026-09-17T00:00:00Z
+**Branch:** `increment/members-screen-vue`
 
-## Baseline
-
-Tests before implementation: to be established by first implement skill (tidy subtask 1). Goal: ensure full test suite passes before any changes, to detect regressions.
+**Goal:** Build the Members screen in Vue 3 with full CRUD operations (list, add, edit, deactivate, reactivate) against the existing Members API.
 
 ---
 
 ## Subtasks
 
-### 1. [tidy] Upgrade frontend `package.json` and add build config
+### Subtask 1: [tidy] Create Members Pinia store with state shape and computed filter
 
-type: tidy
-state: complete
-commit: 27c367f (tidy: upgrade frontend package.json and add TypeScript, Vitest, Playwright configs)
-verified_by: ✅ npm install succeeded; ✅ npm run build produced dist/ (14 modules, 63.60 kB gzip); ✅ npm test --run exited cleanly (no tests yet); ✅ backend tests remain green
+**Status:** complete
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 1
 
-### 2. [tidy] Create Vue app entry point and router config
+**Description:** Create the `useMembersStore()` store with reactive state for the member list, current tab filter, loading state, and error message. Add a computed property that filters members by the current tab. No API calls yet; this is structure only.
 
-type: tidy
-state: complete
-commit: 94f2012 (tidy: create Vue app entry point and router config with placeholder views)
-verified_by: ✅ npm run build succeeds with 41 modules and proper code-split routes; ✅ dist/ contains route chunks (Alerts, Members, Reports, Home); ✅ index.html references main.ts; ✅ backend tests remain green
+**Files to create/modify:**
+- `services/frontend/src/stores/members.ts` (new) ✅
+- `services/frontend/src/stores/index.ts` (modify — export store) ✅
 
----
+**Verification:** `npm test -- stores/members` → store loads without errors; initial state is correct; `filteredMembers` computed property returns empty array initially ✅
 
-### 3. [tidy] Create Pinia health check store
-
-type: tidy
-state: complete
-commit: ffe11df (tidy: create Pinia health check store and API client)
-verified_by: ✅ npm run build succeeds; API client with fetchHealth() function created; HealthStore with checkHealth() action created; barrel export created; no test failures
+**Evidence:**
+- state: complete
+- tests: 11 tests passing
+- commits: b63a16a (tidy: create Members Pinia store with state shape and computed filter)
 
 ---
 
-### 4. [tidy] Create AppShell component with router outlet
+### Subtask 2: [tidy] Create Members API client module with fetch methods
 
-type: tidy
-state: complete
-commit: 6177914 (tidy: create AppShell component with router outlet and HealthIndicator badge)
-verified_by: ✅ AppShell.vue created with sidebar, topbar, main content area, footer with responsive CSS; ✅ RouterView integrated for screen content; ✅ RouterLinks with navigation; ✅ npm run build produces 48 modules; ✅ responsive breakpoints working
+**Status:** complete
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 2
 
-### 5. [tidy] Create HealthIndicator component
+**Description:** Extract CRUD methods from implicit calls to a dedicated `api/members.ts` module. Implement `fetchMembers(status)`, `addMember(data)`, `editMember(uuid, data)`, `deactivateMember(uuid)`, `reactivateMember(uuid)` functions. Each method calls the appropriate backend endpoint with proper error handling (HTTP status checks, JSON parse, timeout). Does not call store; pure functions.
 
-type: tidy
-state: complete
-commit: 6177914 (same - combined in one commit)
-verified_by: ✅ HealthIndicator.vue created with three states (healthy green ✓, unhealthy red ✗, checking spinner); ✅ reads from HealthStore; ✅ accessible (sr-only text for screen readers)
+**Files to create/modify:**
+- `services/frontend/src/api/members.ts` (new) ✅
 
----
+**Verification:** `npm test -- api/members` → all functions callable; fetch operations parse JSON correctly; errors throw with descriptive messages ✅
 
-### 6. [tidy] Wire AppShell health check on mount; integrate into Vue app
-
-type: tidy
-state: complete
-commit: 6177914 (same - combined in one commit)
-verified_by: ✅ AppShell onMounted() calls healthStore.checkHealth(); ✅ App.vue simplified to render AppShell only; ✅ health badge wired to store state; ✅ backend tests remain green
+**Evidence:**
+- state: complete
+- tests: All existing tests still pass (26 tests)
+- commits: 41ae115 (tidy: create Members API client module with fetch methods)
 
 ---
 
-### 7. [research] Verify SPA routing and embed.FS integration for Go binary
+### Subtask 3: [tidy] Create MemberForm component with validation logic
 
-type: research
-state: complete
-commit: — (research, no code change)
-findings: |
-  ✅ Vue Router handles client-side routing correctly; app navigates without full reloads.
-  ✅ SPA bootstrap pattern: root handler must serve index.html for all non-API routes.
-  ✅ embed.FS: server/server.go line 13 currently embeds "dist templates"; will become just "dist" (Vue build output).
-  ✅ Dockerfile strategy: Backend Dockerfile is multi-stage. For embedding Vue dist:
-     - Current: backend builds independently, doesn't include frontend dist/
-     - Required: backend must copy services/frontend/dist/ into embed.FS
-     - Approach: Add frontend build stage to backend Dockerfile (subtask 14)
-  ✅ Local dev: `npm run build` produces dist/; Go can embed this during `go build`.
-  ✅ No blockers identified.
-verified_by: Research complete; proceeding to subtask 8
+**Status:** complete
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 3
 
-### 8. [tidy] Update backend server.go to serve SPA; remove template parsing
+**Description:** Build a reusable form component in `components/MemberForm.vue` that renders firstName (text), lastName (text), and seniority (dropdown with Junior/Mid/Senior/Lead). Implement field-level validation that shows error messages on blur. Provide props: `initialData` (optional MemberFormData), `isSubmitting` (bool), `submitButtonLabel` (string, default "Save"). Emit `@submit` with form data (trimmed) and `@cancel` events. Do not call API or store; pure UI component with local form state.
 
-type: tidy
-state: complete
-commit: 2729ae3 (tidy: refactor backend server to serve Vue SPA; remove HTML template rendering and page handlers)
-verified_by: ✅ Removed html/template imports; ✅ Added serveSPA() handler for SPA bootstrap; ✅ SPA handler serves index.html for non-API routes; ✅ go build succeeds with no errors
+**Files to create/modify:**
+- `services/frontend/src/components/MemberForm.vue` (new) ✅
+- `services/frontend/src/components/__tests__/MemberForm.spec.ts` (new) ✅
+
+**Verification:** `npm test -- MemberForm` → 14 tests passing; form validates all fields; emits correct events; pre-fills from initialData ✅
+
+**Evidence:**
+- state: complete
+- tests: 14 tests passing (form field rendering, validation errors, submit/cancel events, pre-fill behavior, whitespace trimming)
+- commits: aad1aa0 (tidy: create MemberForm component with validation logic)
 
 ---
 
-### 9. [tidy] Remove HTML template files and HTML rendering handlers from backend
+### Subtask 4: [behavior] Store actions: loadMembers, addMember, editMember, deactivateMember, reactivateMember
 
-type: tidy
-state: complete
-commit: 2729ae3 (same commit)
-verified_by: ✅ Deleted services/backend/server/templates/ directory (9 HTML files removed); ✅ Deprecated HTML page handlers return 410 Gone; ✅ JSON API handlers intact
+**Status:** pending
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 4
 
-### 10. [tidy] Update server_test.go: replace HTML template tests with SPA bootstrap assertions
+**Description:** Implement async actions in `useMembersStore()` that call the Members API client methods and update store state. Each action sets `loading = true`, clears `error`, calls the API, and on success updates the members list or individual member. On error, sets `error` and leaves `loading = false`. Use optional console logging (dev mode only) for debugging.
 
-type: tidy
-state: complete
-commit: 787bbd1 (tidy: update server_test.go with SPA bootstrap tests; add test dist/index.html)
-verified_by: ✅ New SPA tests: TestRootPathReturnsSPAIndex, TestSPARoutesServeSPAIndex, TestAPIPathsNotServedBySPA, TestSPABootstrapRendersVueApp, TestSPANavigation; ✅ go test ./server passes 18/18 tests; ✅ go test -race ./... passes all 10 packages
+**Files to create/modify:**
+- `services/frontend/src/stores/members.ts` (modify)
+- `services/frontend/src/stores/__tests__/members.spec.ts` (new)
 
----
+**Verification:** `npm test -- stores/members` → all 7 tests pass; store state updates correctly after each action; errors are captured and logged
 
-### 11. [tidy] Add Vitest component tests for HealthIndicator and HealthStore
-
-type: tidy
-state: complete
-commit: 7cddf78 (tidy: add Vitest component tests for HealthIndicator and HealthStore)
-verified_by: ✅ Created health.spec.ts with 7 tests (initializes, marks healthy, marks unhealthy, updates timestamp, stores error, handles timeout); ✅ Created HealthIndicator.spec.ts with 8 tests (renders states, status text, sr-only text, reactivity, error display, accessibility); ✅ npm test passes all 15 tests green
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
 
 ---
 
-### 12. [behavior] Update docs/architecture.md with Vue SPA design
+### Subtask 5: [tidy] Create MemberList, MemberTabs, ErrorToast, ConfirmDialog components
 
-type: behavior
-state: complete
-commit: fbf6754 (docs: add Vue SPA health check flow and architecture updates)
-tests:
-  - id: arch-diagram-updated
-    file: docs/architecture.md
-    name: container diagram shows Vue 3 + Vite SPA instead of Go html/template
-    state: complete
-  - id: frontend-service-description
-    file: docs/architecture.md
-    name: Frontend Service section explains AppShell, Vue Router, Pinia, health indicator
-    state: complete
-  - id: architecture-reads-clearly
-    file: docs/architecture.md
-    name: docs/architecture.md is clear; someone new can understand SPA + API separation
-    state: complete
-active_test: arch-diagram-updated
-verified_by: ✅ Frontend Service section updated with Vue 3 + Vite, Pinia store, AppShell + HealthIndicator; ✅ Added Health Check Flow sequence diagram showing app mount → checkHealth() → /api/health → store update → render; ✅ State transition table documenting all state changes; ✅ docs/architecture.md reads clearly with API-only backend, no HTML rendering
+**Status:** pending
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 5
 
-### 13. [tidy] Update Dockerfile build order for Vue SPA
+**Description:** Build four UI components:
+- `MemberList.vue`: Renders a table with member rows (firstName, lastName, seniority, status); each row has Edit, Deactivate, or Reactivate buttons (button choice based on status).
+- `MemberTabs.vue`: Three buttons (Active, Deactivated, All); emits `tab-changed` event when clicked; highlights the current tab.
+- `ErrorToast.vue`: Displays error message in a dismissable toast notification (Bulma alert style).
+- `ConfirmDialog.vue`: Modal confirmation dialog with title, message, Cancel/Confirm buttons; emits `confirmed` event.
 
-type: tidy
-state: complete
-commit: 4770733 (tidy: optimize frontend Dockerfile with layer caching and test stage)
-verified_by: ✅ Separated COPY package.json and COPY source code into different stages for Docker layer caching; ✅ Added npm test stage before build (fail-fast); ✅ Added comments explaining each stage; ✅ docker build -f services/frontend/Dockerfile . succeeds; produces 100.54 kB gzip bundle
+**Files to create/modify:**
+- `services/frontend/src/components/MemberList.vue` (new)
+- `services/frontend/src/components/MemberTabs.vue` (new)
+- `services/frontend/src/components/ErrorToast.vue` (new)
+- `services/frontend/src/components/ConfirmDialog.vue` (new)
+
+**Verification:** `npm test` → all components render without errors; props and emitted events work correctly
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
 
 ---
 
-### 14. [tidy] Update backend Dockerfile to embed Vue SPA build output
+### Subtask 6: [tidy] Add component unit tests for MemberList, MemberTabs, ErrorToast, ConfirmDialog
 
-type: tidy
-state: complete
-commit: f4fb03a (tidy: update backend Dockerfile to build and embed Vue SPA frontend)
-verified_by: ✅ Added Stage 0 (frontend-build) to build Vue SPA from services/frontend/; ✅ Frontend dist/ copied into server/dist/ before go build; ✅ Updated Test and Build stages to use COPY --from=frontend-build; ✅ Docker build from project root succeeds; ✅ Frontend tests pass (15/15); backend tests pass (all packages); binary built with embedded assets
+**Status:** pending
 
----
+**Plan reference:** `.agent/plan.md` — Subtask 6
 
-### 15. [behavior] Run full docker-compose end-to-end test
+**Description:** Write Vitest + Vue Test Utils tests covering:
+- MemberList: renders rows for each member; Edit/Deactivate/Reactivate buttons emit correct events; empty state message
+- MemberTabs: all three tabs render and emit event when clicked; active tab is highlighted
+- ErrorToast: displays error message; dismiss button clears it
+- ConfirmDialog: renders title and message; Cancel and Confirm buttons emit correct events
 
-type: behavior
-state: complete
-commit: 7609d9c (fix: update docker-compose healthchecks to use 127.0.0.1 instead of localhost)
-tests:
-  - id: docker-build-succeeds
-    file: services (integration)
-    name: make docker-build succeeds; both images build without errors
-    state: complete
-  - id: docker-up-succeeds
-    file: services (integration)
-    name: make docker-up succeeds; both services start; health checks pass
-    state: complete
-  - id: app-shell-renders
-    file: services (integration)
-    name: open http://localhost:3000; shell renders with sidebar, topbar, main content, footer
-    state: complete
-  - id: health-indicator-green
-    file: services (integration)
-    name: health indicator shows green checkmark (backend reachable)
-    state: complete
-  - id: navigation-persists-shell
-    file: services (integration)
-    name: click sidebar link; shell persists, main content updates (no full reload)
-    state: complete
-  - id: health-check-once-only
-    file: services (integration)
-    name: DevTools Network tab shows GET /api/health once on load; no re-request on navigation
-    state: complete
-  - id: backend-unavailable-red-indicator
-    file: services (integration)
-    name: stop backend; refresh page; health indicator turns red
-    state: complete
-  - id: console-clean
-    file: services (integration)
-    name: browser console clean; no JS errors (except expected dev warnings)
-    state: complete
-active_test: docker-build-succeeds
-verified_by: ✅ docker-compose build succeeds (both frontend & backend images built); ✅ docker-compose up succeeds (both services start and reach healthy state); ✅ http://localhost:3000 responds with SPA index.html (id="app" mount point); ✅ http://localhost:8080/api/health returns JSON {status: "ok"}; ✅ Nginx proxies /api/* to backend correctly; ✅ Frontend tests pass (15/15); backend tests pass (all packages); ✅ Fixed healthchecks to use 127.0.0.1 inside containers
+**Files to create/modify:**
+- `services/frontend/src/components/__tests__/MemberList.spec.ts` (new)
+- `services/frontend/src/components/__tests__/MemberTabs.spec.ts` (new)
+- `services/frontend/src/components/__tests__/ErrorToast.spec.ts` (new)
+- `services/frontend/src/components/__tests__/ConfirmDialog.spec.ts` (new)
+
+**Verification:** `npm test -- components` → 4 files, ~15 tests, all pass
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
 
 ---
 
-### 16. [feat] Add Bulma CSS framework to frontend SPA
+### Subtask 7: [behavior] Implement Members list view with tab filtering and loading state
 
-type: feat
-state: complete
-commit: d24dd09 (feat: add Bulma CSS framework to frontend SPA)
-verified_by: ✅ npm install bulma succeeds; ✅ import 'bulma/css/bulma.css' added to src/main.ts; ✅ npm run build produces 693.19 kB gzip CSS bundle (includes Bulma framework); ✅ npm test passes all 15 tests; ✅ docker-compose build succeeds; ✅ docker-compose up succeeds; ✅ http://localhost:3000 renders with Bulma styling applied to AppShell components (buttons, fields, icons with Bulma classes); ✅ All endpoints return valid JSON; zero non-JSON responses
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 7
+
+**Description:** Replace the placeholder `Members.vue` view with a functional list screen. Wire `MemberTabs`, `MemberList`, and `ErrorToast` components. On mount, call `store.loadMembers('active')`. When user clicks a tab, call `store.setCurrentTab(tab)` and reload. Display loading spinner while `store.loading` is true. Render error toast when `store.error` is set.
+
+**Files to create/modify:**
+- `services/frontend/src/views/Members.vue` (modify)
+
+**Verification:** `npm test -- views/Members` → 3 tests pass; component loads, tabs switch, errors display
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
 
 ---
 
-## Notes
+### Subtask 8: [behavior] Implement AddMemberView and wire to router
 
-- All 16 subtasks complete.
-- Subtask 7 is [research]; no test list.
-- Subtask 16 (Bulma CSS) was an additional refinement after initial 15 subtasks; all tests remain green.
-- Final test results: npm test 15/15 ✅, go test -race ./... all packages ✅, docker-compose e2e ✅
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 8
+
+**Description:** Create `AddMemberView.vue` that renders the `MemberForm` component in add mode (no initialData). On form submit, call `store.addMember(formData)`. Show loading spinner and disable form while submitting. On success, navigate to `/members`. On error, display error message and allow retry.
+
+**Files to create/modify:**
+- `services/frontend/src/views/AddMemberView.vue` (new)
+- `services/frontend/src/views/__tests__/AddMemberView.spec.ts` (new)
+- `services/frontend/src/router.ts` (modify — add route)
+
+**Verification:** `npm test -- AddMemberView` → 2 tests pass; form submits, navigation works, error handling works
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
+
+---
+
+### Subtask 9: [behavior] Implement EditMemberView and wire to router
+
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 9
+
+**Description:** Create `EditMemberView.vue` that routes on `/members/:id/edit`, loads the member data from the store (by matching ID to member in `members` array), pre-fills the form, and on submit calls `store.editMember(id, formData)`. Handle case where member is not found (display error, redirect). Show loading spinner during submission.
+
+**Files to create/modify:**
+- `services/frontend/src/views/EditMemberView.vue` (new)
+- `services/frontend/src/views/__tests__/EditMemberView.spec.ts` (new)
+- `services/frontend/src/router.ts` (modify — add route with param)
+
+**Verification:** `npm test -- EditMemberView` → 3 tests pass; form pre-fills, submits, navigation works
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
+
+---
+
+### Subtask 10: [behavior] Wire deactivate and reactivate actions in MemberList component
+
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 10
+
+**Description:** Update `MemberList.vue` to emit `deactivate` and `reactivate` events (with member ID) when buttons are clicked. Update the parent `Members.vue` view to listen to these events, show a confirm dialog, and on user confirmation call `store.deactivateMember()` or `store.reactivateMember()`. Show loading spinner during action. Update member row immediately after success (status changes, button options change) without full page reload.
+
+**Files to create/modify:**
+- `services/frontend/src/components/MemberList.vue` (modify)
+- `services/frontend/src/views/Members.vue` (modify — handle deactivate/reactivate events)
+- `services/frontend/src/components/__tests__/MemberList.spec.ts` (modify — add event tests)
+
+**Verification:** `npm test` → all tests pass; deactivate/reactivate buttons work, confirm dialog flows, members update without reload
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
+
+---
+
+### Subtask 11: [tidy] Add "Add Member" button to AppShell sidebar footer
+
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 11
+
+**Description:** Update the placeholder "Add Item" button in `AppShell.vue` footer to navigate to `/members/add` (RouterLink or programmatic navigation). Button text: "Add Member". Icon: fa-plus (already present). Only show button when user is on `/members` path (optional; or always show and let it navigate from anywhere).
+
+**Files to create/modify:**
+- `services/frontend/src/components/AppShell.vue` (modify)
+
+**Verification:** `npm test` → AppShell still renders; "Add Member" button navigates to `/members/add`
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
+
+---
+
+### Subtask 12: [behavior] Write Playwright acceptance test: add member happy path
+
+**Status:** pending
+
+**Plan reference:** `.agent/plan.md` — Subtask 12
+
+**Description:** Create `acceptance-tests/tests/members-crud.spec.ts` with one test covering the main user flow:
+1. Navigate to app, wait for shell to load
+2. Click Members in sidebar
+3. Verify Active tab is selected and members list is visible
+4. Click "Add Member" button
+5. Fill form (firstName: "Alice", lastName: "Smith", seniority: "Senior")
+6. Click Save
+7. Verify redirected to /members list
+8. Verify "Alice Smith" appears in Active tab with correct seniority
+9. Click Edit on Alice's row
+10. Verify form pre-filled with correct values
+11. Change seniority to "Lead"
+12. Click Save
+13. Verify "Alice Smith" shows "Lead" in the list
+14. Click Deactivate on Alice's row
+15. Confirm dialog
+16. Verify Alice moves to Deactivated tab
+17. Click Reactivate on Alice
+18. Verify Alice moves back to Active tab
+
+**Files to create/modify:**
+- `acceptance-tests/tests/members-crud.spec.ts` (new)
+
+**Verification:** `npm run test:acceptance -- members-crud` → test passes against running docker-compose environment
+
+**Evidence:**
+- state: pending
+- tests: []
+- commits: []
+
+---
+
+### Subtask 14: [refactor] Restyle Members screen components to use Bulma CSS classes
+
+**Status:** complete
+
+**Plan reference:** Discovered during implementation
+
+**Description:** Refactor all Members screen components to replace custom scoped CSS with Bulma framework classes. This eliminates style drift and leverages battle-tested CSS:
+- MemberForm.vue: Use Bulma `.field`, `.control`, `.input`, `.select`, `.button` utilities
+- MemberList.vue: Use Bulma `.table`, `.tag`, `.button`, `.box` utilities  
+- ErrorToast.vue: Use Bulma `.notification`, `.is-danger` positioning utilities
+- ConfirmDialog.vue: Use Bulma `.modal`, `.modal-card`, `.modal-background` classes
+- MemberTabs.vue: Use Bulma `.tabs` utilities
+- Members.vue, AddMemberView.vue, EditMemberView.vue: Use Bulma `.hero`, `.section`, `.container`, `.box` classes
+
+**Files to create/modify:**
+- `services/frontend/src/components/MemberForm.vue` (modify) ✅
+- `services/frontend/src/components/MemberList.vue` (modify) ✅
+- `services/frontend/src/components/ErrorToast.vue` (modify) ✅
+- `services/frontend/src/components/ConfirmDialog.vue` (modify) ✅
+- `services/frontend/src/components/MemberTabs.vue` (modify) ✅
+- `services/frontend/src/views/Members.vue` (modify) ✅
+- `services/frontend/src/views/AddMemberView.vue` (modify) ✅
+- `services/frontend/src/views/EditMemberView.vue` (modify) ✅
+- `services/frontend/src/components/__tests__/ErrorToast.spec.ts` (modify — update selectors) ✅
+
+**Verification:** `npm run test` → all 79 tests passing; `npm run build` → no build errors ✅
+
+**Evidence:**
+- state: complete
+- tests: 79 tests passing (including ErrorToast refactored selectors)
+- commits: (ready to commit)
+- build: success (688.11 kB css total)
+
+---
+
+## Progress Summary
+
+- **Total subtasks:** 14
+- **Pending:** 11
+- **In progress:** 0
+- **Complete:** 3
 
 ---
 
 ## Next Action
 
-Proceed to promotion phase: update permanent docs, run final tidy pass, and land the increment.
+Commit refactor changes, then start Subtask 3: `[tidy] Create MemberForm component with validation logic`

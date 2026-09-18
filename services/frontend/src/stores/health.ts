@@ -35,9 +35,9 @@ export const useHealthStore = defineStore('health', () => {
         checkError.value = 'Unknown error'
       }
 
-      // Log warning to console (dev aid; can be disabled in production)
+      // Log error to console (dev aid only)
       if (!import.meta.env.PROD) {
-        console.warn('[health] Backend health check failed:', checkError.value)
+        console.debug('[health] Backend health check failed:', checkError.value)
       }
     }
   }

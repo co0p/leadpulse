@@ -1,9 +1,12 @@
 /**
  * API client for backend communication
  * Handles health checks and other API calls
+ * 
+ * In production (Docker): uses /api which nginx proxies to backend:8080
+ * In development: uses configured VITE_API_URL or /api (dev server proxy)
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
 
 export interface HealthResponse {
   status: 'ok' | string
@@ -20,7 +23,7 @@ export async function fetchHealth(): Promise<HealthResponse> {
   const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/health`, {
+    const response = await fetch(`${API_BASE_URL}/health`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'

@@ -111,22 +111,19 @@
         </nav>
 
         <div class="app-sidebar-footer">
-          <button class="button is-primary is-fullwidth" type="button">
+          <button
+            v-if="isOnMembersPage"
+            class="button is-primary is-fullwidth"
+            type="button"
+            @click="navigateToAddMember"
+          >
             <span class="icon-text">
               <span class="icon"><i class="fas fa-plus"></i></span>
-              <span>Add Item</span>
+              <span>Add Member</span>
             </span>
           </button>
         </div>
       </aside>
-
-      <!-- Sidebar overlay for mobile -->
-      <div
-        v-if="sidebarOpen"
-        class="app-sidebar-overlay"
-        role="presentation"
-        @click="closeSidebar"
-      ></div>
 
       <!-- Main content -->
       <main class="app-main" role="main">
@@ -154,11 +151,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import HealthIndicator from './HealthIndicator.vue'
 import { useHealthStore } from '../stores/health'
 
 const route = useRoute()
+const router = useRouter()
 const healthStore = useHealthStore()
 
 const sidebarOpen = ref(window.innerWidth >= 1024)
@@ -167,10 +165,15 @@ const pageTitle = computed(() => {
   const titles: Record<string, string> = {
     '/': 'Home',
     '/members': 'Members',
+    '/members/add': 'Add Member',
     '/alerts': 'Alerts',
     '/reports': 'Reports'
   }
   return titles[route.path] || 'Team Impact Scorecard'
+})
+
+const isOnMembersPage = computed(() => {
+  return route.path.startsWith('/members')
 })
 
 function toggleSidebar() {
@@ -183,6 +186,11 @@ function closeSidebar() {
   if (window.innerWidth < 1024) {
     sidebarOpen.value = false
   }
+}
+
+function navigateToAddMember() {
+  router.push('/members/add')
+  closeSidebar()
 }
 
 onMounted(() => {
@@ -273,7 +281,7 @@ onMounted(() => {
   flex-direction: column;
   overflow-y: auto;
   flex-shrink: 0;
-  z-index: 5;
+  z-index: 100;
 }
 
 .app-sidebar-header {
@@ -294,12 +302,14 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-/* ── Sidebar overlay (mobile) ────────────────────────────────────── */
+/* ── Sidebar overlay (mobile only) ──────────────────────────────── */
 .app-sidebar-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  z-index: 4;
+  z-index: 98;
+  pointer-events: auto;
+  top: 56px; /* below topbar */
 }
 
 /* ── Main content ────────────────────────────────────────────────── */
@@ -330,17 +340,28 @@ onMounted(() => {
 /* ── Responsive: sidebar slides in on mobile ─────────────────────── */
 @media screen and (max-width: 1023px) {
   .app-sidebar {
-    position: absolute;
+    position: fixed;
     left: 0;
-    top: 0;
-    bottom: 0;
+    top: 56px;
+    bottom: 52px;
+    width: 260px;
     transform: translateX(-100%);
     transition: transform 0.3s ease;
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
   }
 
   .app-sidebar.app-sidebar--open {
     transform: translateX(0);
+  }
+
+  /* Add scrim/backdrop when sidebar is open */
+  .app-sidebar.app-sidebar--open::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 999;
   }
 }
 

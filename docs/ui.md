@@ -238,6 +238,67 @@ All new feature screens must:
 
 ---
 
+## Members Screen Patterns
+
+The Members screen implements a tab-based list view with CRUD operations (create, read, update, delete/deactivate, reactivate). It serves as a reference implementation for future list/detail screens.
+
+**Layout Structure:**
+- Hero banner with page title and subtitle
+- Tab navigation (Active, Deactivated, All)
+- Members table with inline action buttons (Edit, Deactivate/Reactivate)
+- Error toast for notifications
+- Confirmation dialogs for destructive actions (deactivate/reactivate)
+
+**Components:**
+
+| Component | Location | Purpose | Props |
+|-----------|----------|---------|-------|
+| `MemberForm.vue` | `components/` | Reusable form for add/edit operations | `initialData`, `isSubmitting`, `submitButtonLabel` |
+| `MemberList.vue` | `components/` | Table of members with action buttons | `members` (array), `@deactivate`, `@reactivate` |
+| `MemberTabs.vue` | `components/` | Tab navigation for filtering | `currentTab`, `@selectTab` |
+| `ErrorToast.vue` | `components/` | Async error notification popup | `message`, `duration`, `@close` |
+| `ConfirmDialog.vue` | `components/` | Modal confirmation for destructive actions | `isOpen`, `title`, `message`, `@confirm`, `@cancel` |
+| `Members.vue` | `views/` | List view wrapper | Orchestrates tabs, list, error toast, loading state |
+| `AddMemberView.vue` | `views/` | Add member form page | Routes to `/members/add` |
+| `EditMemberView.vue` | `views/` | Edit member form page | Routes to `/members/:id/edit` |
+
+**State Management (Pinia store `useMembersStore`):**
+- `members[]` — array of member objects (id, firstName, lastName, seniority, status, createdAt)
+- `currentTab` — active filter tab (active, deactivated, all)
+- `loading` — global loading state for API operations
+- `error` — global error message (set on API failure)
+- `filteredMembers` (computed) — members filtered by current tab
+- Actions: `loadMembers()`, `addMember()`, `editMember()`, `deactivateMember()`, `reactivateMember()`
+
+**API Layer (`api/members.ts`):**
+- Pure fetch functions with 5s timeout
+- Error handling: HTTP status checks, JSON parse, throw descriptive messages
+- Functions: `fetchMembers(status)`, `addMember(data)`, `editMember(id, data)`, `deactivateMember(id)`, `reactivateMember(id)`
+
+**Form Validation (MemberForm component):**
+- Field-level validation on blur (firstName, lastName, seniority)
+- Show/hide error messages for each field
+- Submit button disabled until all fields are valid
+- Trim whitespace on submit
+
+**Confirmation Dialog Pattern:**
+- Show modal before any destructive action (deactivate, reactivate)
+- Display member name in confirmation message
+- Show loading spinner in confirm button during API call
+- Disable buttons during loading
+
+**Error Handling:**
+- API errors caught and stored in store (`store.error`)
+- ErrorToast component displays error and auto-dismisses after 5s (or manually closed)
+- User can retry failed operations
+
+**Sidebar Button (AppShell):**
+- "Add Member" button appears in sidebar footer only when viewing Members section
+- Button is visible on all breakpoints (desktop, tablet, mobile)
+- Navigates to `/members/add` route
+
+---
+
 ## Update Policy
 
 Update this document when:
